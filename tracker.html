@@ -3,16 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    body { font-family: sans-serif; }
-    .tracker { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
-    .title { font-weight: bold; margin-bottom: 6px; }
-    .jet { margin-left: 10px; }
-    input { width: 70px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 10px; }
+    .tracker { border: 1px solid #d0d0d0; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
+    .title { font-weight: 700; }
+    .muted { color: #666; font-size: 12px; }
+    input[type="number"] { width: 90px; padding: 6px; }
+    button { padding: 6px 10px; cursor: pointer; }
+    .jets { margin-top: 8px; display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .jetline { display:flex; justify-content:space-between; align-items:center; gap: 10px; }
+    .jetname { font-weight: 600; }
   </style>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
 <body>
-<div id="container"></div>
-<script src="https://p.trellocdn.com/power-up.min.js"></script>
-<script src="./tracker.js"></script>
+  <div id="app"></div>
+  <script src="./tracker.js"></script>
 </body>
 </html>
