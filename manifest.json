@@ -1,20 +1,17 @@
 {
-  "name": "WJ ProTally",
-  "details": "Waterjet run tracking per card and checklist item",
+  "name": "Waterjet Run Tracker",
+  "details": "Run counters per Waterjet with totals and checklist linking.",
   "author": "Tristen",
   "icon": {
     "url": "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"
   },
   "capabilities": {
-    "on-enable": {
-      "url": "./index.html"
-    },
     "card-buttons": {
-      "url": "./index.html"
+      "url": "index.html"
     },
     "card-back-section": {
-      "url": "./index.html",
-      "height": 420
+      "url": "index.html",
+      "height": 560
     }
   }
 }

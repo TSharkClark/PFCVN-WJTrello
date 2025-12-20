@@ -1,57 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <title>WJ ProTally Connector</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WJ Power-Up Connector</title>
+  </head>
+  <body>
+    <script src="https://p.trellocdn.com/power-up.min.js"></script>
+    <script>
+      /* global TrelloPowerUp */
+      const t = TrelloPowerUp.initialize({
+        "card-buttons": function (t) {
+          return [{
+            icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
+            text: "Add Run Tracker",
+            callback: function (t) {
+              return t.popup({
+                title: "Create Run Tracker",
+                url: t.signUrl("./create.html"),
+                height: 560
+              });
+            }
+          }];
+        },
 
-  <!-- REQUIRED Trello Power-Up client -->
-  <script src="https://p.trellocdn.com/power-up.min.js"></script>
-</head>
-<body>
-<script>
-/*
-  This file is the CONNECTOR / HANDSHAKE page.
-  Trello loads this in a hidden iframe and expects
-  TrelloPowerUp.initialize() to be called.
-*/
-
-TrelloPowerUp.initialize({
-
-  /* REQUIRED for Admin Portal power-ups */
-  'on-enable': function (t, options) {
-    // Must return a Promise
-    return Promise.resolve();
-  },
-
-  /* Button on the card (top of card back) */
-  'card-buttons': function (t) {
-    return [{
-      icon: 'https://cdn-icons-png.flaticon.com/512/992/992700.png',
-      text: 'Add Run Tracker',
-      callback: function (t) {
-        return t.popup({
-          title: 'Create Run Tracker',
-          url: t.signUrl('./create.html'),
-          height: 420
-        });
-      }
-    }];
-  },
-
-  /* Section on the card back */
-  'card-back-section': function (t) {
-    return {
-      title: 'Waterjet Run Tracker',
-      icon: 'https://cdn-icons-png.flaticon.com/512/3063/3063822.png',
-      content: {
-        type: 'iframe',
-        url: t.signUrl('./tracker.html'),
-        height: 420
-      }
-    };
-  }
-
-});
-</script>
-</body>
+        "card-back-section": function (t) {
+          return {
+            title: "Waterjet Run Tracker",
+            icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
+            content: {
+              type: "iframe",
+              url: t.signUrl("./tracker.html"),
+              height: 560
+            }
+          };
+        }
+      });
+    </script>
+  </body>
 </html>
