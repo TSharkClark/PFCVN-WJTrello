@@ -1,21 +1,50 @@
 <!DOCTYPE html>
 <html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 12px; }
+    label { font-weight: 600; display:block; margin-top: 10px; }
+    input, select { width: 100%; padding: 8px; margin-top: 6px; }
+    .row { display:flex; gap:10px; }
+    .row > div { flex: 1; }
+    button { margin-top: 12px; padding: 10px; width: 100%; cursor:pointer; }
+    .muted { color:#666; font-size: 12px; margin-top: 8px; }
+  </style>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+</head>
 <body>
-<h3>Create Run Tracker</h3>
+  <h3 style="margin:0 0 6px 0;">Create Run Tracker</h3>
+  <div class="muted">Make one tracker block (you can add multiple per card).</div>
 
-<label>Tracker Name (optional)</label><br>
-<input id="name"><br><br>
+  <label>Tracker name (optional)</label>
+  <input id="name" placeholder="Example: Jet 1 solo run, Phase A, etc." />
 
-<label>Link Checklist Item (optional)</label><br>
-<select id="checklist"></select><br><br>
+  <label>Link to checklist item (optional)</label>
+  <select id="checkItem">
+    <option value="">— Not linked —</option>
+  </select>
 
-<label>Jets</label><br>
-<label><input type="checkbox" value="Waterjet 1"> Waterjet 1</label><br>
-<label><input type="checkbox" value="Waterjet 2"> Waterjet 2</label><br>
-<label><input type="checkbox" value="Waterjet 3"> Waterjet 3</label><br><br>
+  <div class="row">
+    <div>
+      <label>Total target</label>
+      <input id="totalTarget" type="number" step="0.01" value="16.8" />
+    </div>
+    <div>
+      <label>Per-jet target</label>
+      <input id="jetTarget" type="number" step="0.01" value="5.6" />
+    </div>
+  </div>
 
-<button id="create">Create</button>
+  <label>Jets to include</label>
+  <div>
+    <label><input type="checkbox" class="jet" value="Waterjet 1" checked> Waterjet 1</label>
+    <label><input type="checkbox" class="jet" value="Waterjet 2" checked> Waterjet 2</label>
+    <label><input type="checkbox" class="jet" value="Waterjet 3" checked> Waterjet 3</label>
+  </div>
 
-<script src="./create.js"></script>
+  <button id="create">Create tracker</button>
+
+  <script src="./create.js"></script>
 </body>
 </html>
