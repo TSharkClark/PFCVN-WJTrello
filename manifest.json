@@ -1,15 +1,18 @@
 {
   "name": "WJ ProTally",
-  "details": "Multi-instance waterjet run tracking per checklist item",
+  "details": "Waterjet run tracking per card and checklist item",
   "author": "Tristen",
   "icon": {
     "url": "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"
   },
   "capabilities": {
+    "on-enable": {
+      "url": "./index.html"
+    },
     "card-buttons": {
       "url": "./index.html"
     },
-    "card-detail-section": {
+    "card-back-section": {
       "url": "./index.html",
       "height": 420
     }
