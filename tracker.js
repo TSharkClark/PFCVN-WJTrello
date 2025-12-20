@@ -1,46 +1,33 @@
 /* global TrelloPowerUp */
 const t = TrelloPowerUp.iframe();
+const STORAGE_KEY = 'trackers';
 
-const STORAGE_KEY = 'wj_trackers_v1';
+/**
+ * IMPORTANT: Fixes your "second tracker appears" bug
+ * by preventing overlapping async renders from both appending to the DOM.
+ */
+let renderToken = 0;
 
-function clampNumber(n) {
-  const x = Number(n);
+function n(v) {
+  const x = Number(v);
   return Number.isFinite(x) ? x : 0;
 }
 
-function fmt(n) {
-  // keep decimals but avoid ugly long floats
-  const x = clampNumber(n);
-  return (Math.round(x * 1000) / 1000).toString();
+function fmt(v) {
+  // show up to 3 decimals but trim trailing zeros
+  const x = Math.round(n(v) * 1000) / 1000;
+  return ('' + x).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 }
 
-async function getChecklistItemName(checkItemId) {
-  if (!checkItemId) return null;
+async function getChecklistName(itemId) {
+  if (!itemId) return null;
   const card = await t.card('checklists');
   for (const cl of (card.checklists || [])) {
     for (const item of (cl.checkItems || [])) {
-      if (item.id === checkItemId) return item.name;
+      if (item.id === itemId) return item.name;
     }
   }
   return null;
-}
-
-async function loadState() {
-  return await t.get('card', 'shared', STORAGE_KEY, { trackers: [] });
-}
-
-async function saveState(state) {
-  await t.set('card', 'shared', STORAGE_KEY, state);
-}
-
-function computeTotal(tracker) {
-  let sum = 0;
-  for (const jet of tracker.jets) sum += clampNumber(jet.current);
-  tracker.totalCurrent = sum;
-}
-
-function makeJet(name, target = 0) {
-  return { name, current: 0, target };
 }
 
 function el(tag, attrs = {}, children = []) {
@@ -51,93 +38,160 @@ function el(tag, attrs = {}, children = []) {
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v);
   }
-  for (const child of children) node.appendChild(child);
+  for (const c of children) node.appendChild(c);
   return node;
 }
 
+async function loadTrackers() {
+  return await t.get('card', 'shared', STORAGE_KEY, {});
+}
+
+async function saveTrackers(trackers) {
+  await t.set('card', 'shared', STORAGE_KEY, trackers);
+}
+
+function computeTotals(tracker) {
+  let totalCurrent = 0;
+  let totalMax = 0;
+
+  for (const data of Object.values(tracker.jets || {})) {
+    totalCurrent += n(data.current);
+    totalMax += n(data.max);
+  }
+
+  // optional explicit totalMax (if present from newer create screen)
+  if (tracker.totalMax != null) totalMax = n(tracker.totalMax);
+
+  return { totalCurrent, totalMax };
+}
+
 async function render() {
-  const app = document.getElementById('app');
-  app.innerHTML = '';
+  const myToken = ++renderToken;
 
-  const state = await loadState();
-  const trackers = state.trackers || [];
+  const trackers = await loadTrackers();
 
-  if (trackers.length === 0) {
-    app.appendChild(el('div', { class: 'muted', text: 'No trackers yet. Use “Add Run Tracker” on this card.' }));
+  // stop if another render started while we awaited
+  if (myToken !== renderToken) return;
+
+  const container = document.getElementById('container');
+  container.innerHTML = '';
+
+  const entries = Object.entries(trackers || {});
+  if (entries.length === 0) {
+    container.appendChild(
+      el('div', { class: 'empty', text: 'No trackers yet. Use “Add Run Tracker” on this card.' })
+    );
     t.sizeTo(document.body);
     return;
   }
 
-  for (const tracker of trackers) {
-    computeTotal(tracker);
+  for (const [id, tracker] of entries) {
+    const linkedName = await getChecklistName(tracker.checklistItemId);
+    const displayName = tracker.name || linkedName || 'Run Tracker';
 
-    const titleText = tracker.name || 'Run Tracker';
-    const linkedName = await getChecklistItemName(tracker.checkItemId);
-    const subtitle = linkedName ? `Linked to: ${linkedName}` : (tracker.checkItemId ? 'Linked item not found' : 'Not linked');
+    const { totalCurrent, totalMax } = computeTotals(tracker);
 
     const card = el('div', { class: 'tracker' });
 
-    // Header
-    card.appendChild(el('div', { class: 'row' }, [
-      el('div', { class: 'title', text: titleText }),
-      el('div', { class: 'muted', text: subtitle })
-    ]));
-
-    // Total line
-    const totalLine = el('div', { class: 'row' }, [
-      el('div', { class: 'jetname', text: 'Total Run Count' }),
-      el('div', { class: 'muted', text: `${fmt(tracker.totalCurrent)} / ${fmt(tracker.totalTarget)}` })
+    const headLeft = el('div', {}, [
+      el('div', { class: 'title', text: displayName }),
+      el('div', {
+        class: 'sub',
+        text: tracker.checklistItemId
+          ? (linkedName ? `Linked to: ${linkedName}` : 'Linked checklist item not found')
+          : 'Not linked'
+      })
     ]);
-    card.appendChild(totalLine);
 
-    // Jets
-    const jetsWrap = el('div', { class: 'jets' });
-
-    for (const jet of tracker.jets) {
-      const input = el('input', {
-        type: 'number',
-        step: '0.01',
-        value: fmt(jet.current)
-      });
-
-      input.addEventListener('change', async () => {
-        jet.current = clampNumber(input.value);
-        computeTotal(tracker);
-        await saveState(state);
-        await render();
-      });
-
-      const line = el('div', { class: 'jetline' }, [
-        el('div', { class: 'jetname', text: jet.name }),
-        el('div', { class: 'row' }, [
-          input,
-          el('div', { class: 'muted', text: `/ ${fmt(jet.target)}` })
-        ])
-      ]);
-
-      jetsWrap.appendChild(line);
-    }
-
-    card.appendChild(jetsWrap);
-
-    // Delete tracker
-    card.appendChild(el('div', { class: 'row' }, [
+    const actions = el('div', { class: 'actions' }, [
       el('button', {
-        text: 'Delete tracker',
+        class: 'btn',
+        text: 'Edit',
+        onclick: () => t.popup({
+          title: 'Edit Run Tracker',
+          url: t.signUrl(`./create.html?mode=edit&id=${encodeURIComponent(id)}`),
+          height: 520
+        })
+      }),
+      el('button', {
+        class: 'btn btnDanger',
+        text: 'Delete',
         onclick: async () => {
-          state.trackers = (state.trackers || []).filter(x => x.id !== tracker.id);
-          await saveState(state);
+          const next = { ...(trackers || {}) };
+          delete next[id];
+          await saveTrackers(next);
           await render();
         }
       })
-    ]));
+    ]);
 
-    app.appendChild(card);
+    card.appendChild(el('div', { class: 'head' }, [headLeft, actions]));
+
+    card.appendChild(
+      el('div', { class: 'total' }, [
+        el('div', { class: 'label', text: 'Total Run Count' }),
+        el('div', { class: 'val', text: `${fmt(totalCurrent)} / ${fmt(totalMax)}` })
+      ])
+    );
+
+    const jetsWrap = el('div', { class: 'jets' });
+
+    for (const [jetName, data] of Object.entries(tracker.jets || {})) {
+      const currentVal = n(data.current);
+      const maxVal = n(data.max);
+
+      const input = el('input', {
+        class: 'num',
+        type: 'number',
+        step: 'any',          // allows decimals by typing
+        inputmode: 'decimal',
+        value: fmt(currentVal)
+      });
+
+      const applyValue = async (newVal) => {
+        data.current = n(newVal);
+        tracker.jets[jetName] = data;
+
+        const next = { ...(trackers || {}) };
+        next[id] = tracker;
+
+        await saveTrackers(next);
+        await render();
+      };
+
+      const minus = el('button', {
+        class: 'pm',
+        text: '–',
+        onclick: () => applyValue(currentVal - 1)
+      });
+
+      const plus = el('button', {
+        class: 'pm',
+        text: '+',
+        onclick: () => applyValue(currentVal + 1)
+      });
+
+      input.addEventListener('change', (e) => applyValue(e.target.value));
+
+      jetsWrap.appendChild(
+        el('div', { class: 'jetRow' }, [
+          el('div', { class: 'jetName', text: jetName }),
+          el('div', { class: 'controls' }, [
+            minus,
+            input,
+            plus,
+            el('div', { class: 'max', text: `/ ${fmt(maxVal)}` })
+          ])
+        ])
+      );
+    }
+
+    card.appendChild(jetsWrap);
+    container.appendChild(card);
   }
 
   t.sizeTo(document.body);
 }
 
-t.render(() => {
-  render();
-});
+t.render(() => render());
+window.addEventListener('focus', () => render());

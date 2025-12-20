@@ -2,22 +2,191 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waterjet Run Tracker</title>
+
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 10px; }
-    .tracker { border: 1px solid #d0d0d0; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
-    .title { font-weight: 700; }
-    .muted { color: #666; font-size: 12px; }
-    input[type="number"] { width: 90px; padding: 6px; }
-    button { padding: 6px 10px; cursor: pointer; }
-    .jets { margin-top: 8px; display: grid; grid-template-columns: 1fr; gap: 6px; }
-    .jetline { display:flex; justify-content:space-between; align-items:center; gap: 10px; }
-    .jetname { font-weight: 600; }
+    :root{
+      --bg:#ffffff;
+      --text:#111;
+      --muted:#666;
+      --border:#d9d9d9;
+      --soft:#f6f6f6;
+      --btn:#111;
+      --btnText:#fff;
+      --danger:#b00020;
+    }
+
+    body{
+      margin:0;
+      padding:12px;
+      background:var(--bg);
+      color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    .empty{
+      padding:14px;
+      border:1px dashed var(--border);
+      border-radius:12px;
+      background:var(--soft);
+      color:var(--muted);
+      font-weight:800;
+    }
+
+    .tracker{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+      margin-bottom:12px;
+    }
+
+    .head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .title{
+      font-size:16px;
+      font-weight:950;
+      line-height:1.1;
+    }
+
+    .sub{
+      margin-top:4px;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+    }
+
+    .actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .btn{
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:10px;
+      padding:8px 10px;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ background:var(--soft); }
+
+    .btnDanger{
+      border-color:#ffd0d6;
+      color:var(--danger);
+    }
+
+    .total{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px;
+      border-radius:12px;
+      background:var(--soft);
+      border:1px solid var(--border);
+      margin-bottom:10px;
+    }
+    .total .label{
+      font-weight:950;
+      font-size:14px;
+    }
+    .total .val{
+      font-weight:950;
+      font-size:14px;
+    }
+
+    .jets{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .jetRow{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+    }
+
+    .jetName{
+      font-weight:950;
+      font-size:14px;
+      white-space:nowrap;
+    }
+
+    .controls{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .pm{
+      width:44px;
+      height:44px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--btn);
+      color:var(--btnText);
+      font-weight:950;
+      font-size:20px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
+    }
+    .pm:active{ transform: translateY(1px); }
+
+    /* Hide native spinners */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] { -moz-appearance: textfield; }
+
+    .num{
+      width:120px;
+      height:44px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:0 10px;
+      font-size:16px;
+      font-weight:950;
+      text-align:center;
+    }
+
+    .max{
+      font-weight:950;
+      color:var(--muted);
+      font-size:13px;
+      min-width:80px;
+      text-align:right;
+    }
   </style>
-  <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
+
 <body>
-  <div id="app"></div>
+  <div id="container"></div>
+
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
   <script src="./tracker.js"></script>
 </body>
 </html>

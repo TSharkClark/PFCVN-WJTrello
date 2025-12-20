@@ -2,45 +2,100 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Run Tracker</title>
+
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 12px; }
-    label { font-weight: 600; display:block; margin-top: 10px; }
-    input, select { width: 100%; padding: 8px; margin-top: 6px; }
-    .row { display:flex; gap:10px; }
-    .row > div { flex: 1; }
-    button { margin-top: 12px; padding: 10px; width: 100%; cursor:pointer; }
-    .muted { color:#666; font-size: 12px; margin-top: 8px; }
+    body{
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin:0;
+      padding:12px;
+      color:#111;
+    }
+    h3{ margin:0 0 8px 0; font-weight:950; }
+    .muted{ color:#666; font-weight:800; font-size:12px; margin-bottom:10px; }
+
+    label{ display:block; font-weight:950; margin-top:10px; margin-bottom:6px; }
+    input, select{
+      width:100%;
+      height:44px;
+      border:1px solid #d9d9d9;
+      border-radius:12px;
+      padding:0 10px;
+      font-size:14px;
+      font-weight:900;
+      box-sizing:border-box;
+    }
+
+    .row{ display:flex; gap:10px; }
+    .row > div{ flex:1; }
+
+    .jets{
+      margin-top:8px;
+      border:1px solid #d9d9d9;
+      border-radius:12px;
+      padding:10px;
+      background:#f6f6f6;
+    }
+    .jets label{
+      font-weight:950;
+      margin:8px 0;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .jets input[type="checkbox"]{
+      width:18px;
+      height:18px;
+      margin:0;
+    }
+
+    button{
+      width:100%;
+      height:46px;
+      margin-top:14px;
+      border-radius:12px;
+      border:1px solid #111;
+      background:#111;
+      color:#fff;
+      font-weight:950;
+      cursor:pointer;
+      font-size:14px;
+    }
+    button:active{ transform: translateY(1px); }
   </style>
+
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
+
 <body>
-  <h3 style="margin:0 0 6px 0;">Create Run Tracker</h3>
-  <div class="muted">Make one tracker block (you can add multiple per card).</div>
+  <h3 id="title">Create Run Tracker</h3>
+  <div class="muted" id="subtitle">You can add multiple trackers per card.</div>
 
   <label>Tracker name (optional)</label>
   <input id="name" placeholder="Example: Jet 1 solo run, Phase A, etc." />
 
   <label>Link to checklist item (optional)</label>
-  <select id="checkItem">
+  <select id="checklist">
     <option value="">— Not linked —</option>
   </select>
 
   <div class="row">
     <div>
       <label>Total target</label>
-      <input id="totalTarget" type="number" step="0.01" value="16.8" />
+      <input id="totalMax" type="number" step="any" value="16.8" />
     </div>
     <div>
       <label>Per-jet target</label>
-      <input id="jetTarget" type="number" step="0.01" value="5.6" />
+      <input id="jetMax" type="number" step="any" value="5.6" />
     </div>
   </div>
 
   <label>Jets to include</label>
-  <div>
-    <label><input type="checkbox" class="jet" value="Waterjet 1" checked> Waterjet 1</label>
-    <label><input type="checkbox" class="jet" value="Waterjet 2" checked> Waterjet 2</label>
-    <label><input type="checkbox" class="jet" value="Waterjet 3" checked> Waterjet 3</label>
+  <div class="jets">
+    <label><input type="checkbox" class="jet" value="Waterjet 1" checked /> Waterjet 1</label>
+    <label><input type="checkbox" class="jet" value="Waterjet 2" checked /> Waterjet 2</label>
+    <label><input type="checkbox" class="jet" value="Waterjet 3" checked /> Waterjet 3</label>
   </div>
 
   <button id="create">Create tracker</button>
