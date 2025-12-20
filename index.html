@@ -3,11 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <title>WJ ProTally Connector</title>
+
+  <!-- REQUIRED Trello Power-Up client -->
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
 <body>
 <script>
+/*
+  This file is the CONNECTOR / HANDSHAKE page.
+  Trello loads this in a hidden iframe and expects
+  TrelloPowerUp.initialize() to be called.
+*/
+
 TrelloPowerUp.initialize({
+
+  /* REQUIRED for Admin Portal power-ups */
+  'on-enable': function (t, options) {
+    // Must return a Promise
+    return Promise.resolve();
+  },
+
+  /* Button on the card (top of card back) */
   'card-buttons': function (t) {
     return [{
       icon: 'https://cdn-icons-png.flaticon.com/512/992/992700.png',
@@ -22,7 +38,8 @@ TrelloPowerUp.initialize({
     }];
   },
 
-  'card-detail-section': function (t) {
+  /* Section on the card back */
+  'card-back-section': function (t) {
     return {
       title: 'Waterjet Run Tracker',
       icon: 'https://cdn-icons-png.flaticon.com/512/3063/3063822.png',
@@ -33,6 +50,7 @@ TrelloPowerUp.initialize({
       }
     };
   }
+
 });
 </script>
 </body>
