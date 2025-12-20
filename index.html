@@ -2,9 +2,38 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Waterjet Run Tracker</title>
+  <title>WJ ProTally Connector</title>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
 <body>
-  <p>This is the Waterjet Run Tracker Power-Up. Please open Trello to use it.</p>
+<script>
+TrelloPowerUp.initialize({
+  'card-buttons': function (t) {
+    return [{
+      icon: 'https://cdn-icons-png.flaticon.com/512/992/992700.png',
+      text: 'Add Run Tracker',
+      callback: function (t) {
+        return t.popup({
+          title: 'Create Run Tracker',
+          url: t.signUrl('./create.html'),
+          height: 420
+        });
+      }
+    }];
+  },
+
+  'card-detail-section': function (t) {
+    return {
+      title: 'Waterjet Run Tracker',
+      icon: 'https://cdn-icons-png.flaticon.com/512/3063/3063822.png',
+      content: {
+        type: 'iframe',
+        url: t.signUrl('./tracker.html'),
+        height: 420
+      }
+    };
+  }
+});
+</script>
 </body>
 </html>
