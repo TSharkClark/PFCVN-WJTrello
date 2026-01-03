@@ -37,14 +37,60 @@
       padding:10px;
       background:#f6f6f6;
     }
-    .jets label{
-      font-weight:950;
-      margin:8px 0;
+
+    .jetPick{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:8px 0;
+      border-bottom:1px solid #e3e3e3;
+    }
+    .jetPick:last-child{ border-bottom:none; }
+
+    .jetLeft{
       display:flex;
       align-items:center;
       gap:10px;
+      font-weight:950;
     }
     .jets input[type="checkbox"]{
+      width:18px;
+      height:18px;
+      margin:0;
+    }
+
+    .jetTarget{
+      width:140px;
+      height:40px;
+      border-radius:12px;
+      border:1px solid #d9d9d9;
+      padding:0 10px;
+      font-weight:950;
+      text-align:center;
+      background:#fff;
+    }
+
+    .chipRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top:8px;
+      flex-wrap:wrap;
+    }
+    .chip{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-weight:950;
+      color:#111;
+      background:#f6f6f6;
+      border:1px solid #d9d9d9;
+      padding:8px 10px;
+      border-radius:999px;
+      user-select:none;
+    }
+    .chip input{
       width:18px;
       height:18px;
       margin:0;
@@ -63,6 +109,21 @@
       font-size:14px;
     }
     button:active{ transform: translateY(1px); }
+
+    .smallBtn{
+      height:40px;
+      margin-top:8px;
+      border-radius:12px;
+      border:1px solid #d9d9d9;
+      background:#fff;
+      color:#111;
+      font-weight:950;
+    }
+
+    .divider{
+      margin-top:12px;
+      border-top:1px solid #e6e6e6;
+    }
   </style>
 
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
@@ -73,9 +134,10 @@
   <div class="muted" id="subtitle">You can add multiple trackers per card.</div>
 
   <label>Tracker name (optional)</label>
-  <input id="name" placeholder="Example: Jet 1 solo run, Phase A, etc." />
+  <input id="name" placeholder="Example: Phase A, Solo Jet 1, etc." />
 
   <label>Link to checklist item (optional)</label>
+  <input id="checkFilter" placeholder="Search checklist items..." />
   <select id="checklist">
     <option value="">— Not linked —</option>
   </select>
@@ -83,23 +145,22 @@
   <div class="row">
     <div>
       <label>Total target</label>
-      <input id="totalMax" type="number" step="any" value="16.8" />
+      <input id="totalTarget" type="number" step="any" value="38.8" />
     </div>
     <div>
-      <label>Per-jet target</label>
-      <input id="jetMax" type="number" step="any" value="5.6" />
+      <label>Default per-jet target</label>
+      <input id="defaultJetTarget" type="number" step="any" value="12.9" />
     </div>
   </div>
 
-  <label>Jets to include</label>
-  <div class="jets">
-    <label><input type="checkbox" class="jet" value="Waterjet 1" checked /> Waterjet 1</label>
-    <label><input type="checkbox" class="jet" value="Waterjet 2" checked /> Waterjet 2</label>
-    <label><input type="checkbox" class="jet" value="Waterjet 3" checked /> Waterjet 3</label>
+  <div class="chipRow">
+    <label class="chip">
+      <input id="autoSplit" type="checkbox" checked />
+      Auto-split per-jet targets from Total
+    </label>
   </div>
 
-  <button id="create">Create tracker</button>
+  <button class="smallBtn" id="applyAuto">Apply Auto-Split Now</button>
 
-  <script src="./create.js"></script>
-</body>
-</html>
+  <label>Jets to include + targets</label>
+  <div c

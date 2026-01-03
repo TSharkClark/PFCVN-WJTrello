@@ -5,9 +5,10 @@ const STORAGE_KEY = 'trackers';
 let renderToken = 0;
 
 function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
+function round3(v){ return Math.round(n(v) * 1000) / 1000; }
 
 function fmt(v){
-  const x = Math.round(n(v) * 1000) / 1000;
+  const x = round3(v);
   return ('' + x).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 }
 
@@ -26,40 +27,65 @@ function el(tag, attrs = {}, children = []){
 async function loadTrackers(){
   return await t.get('card','shared',STORAGE_KEY,{});
 }
-
 async function saveTrackers(trackers){
   await t.set('card','shared',STORAGE_KEY,trackers);
 }
 
-async function getChecklistName(itemId){
+/**
+ * More robust checklist hydration:
+ * try t.card('checklists'), then t.card('all'), and safely walk common shapes.
+ */
+async function getChecklistItemName(itemId){
   if (!itemId) return null;
-  const card = await t.card('checklists');
-  for (const cl of (card.checklists || [])){
-    for (const item of (cl.checkItems || [])){
-      if (item.id === itemId) return item.name;
+
+  const candidates = [];
+  try { candidates.push(await t.card('checklists')); } catch {}
+  try { candidates.push(await t.card('all')); } catch {}
+
+  for (const card of candidates){
+    const lists = card?.checklists || card?.checkList || [];
+    for (const cl of lists){
+      const items = cl?.checkItems || cl?.checkItemStates || cl?.items || [];
+      for (const it of items){
+        const id = it?.id || it?.idCheckItem;
+        const name = it?.name;
+        if (id === itemId && name) return name;
+      }
     }
   }
   return null;
 }
 
-function computeTotals(tracker){
-  let totalCurrent = 0;
-  let totalMax = tracker.totalMax != null ? n(tracker.totalMax) : 0;
-
-  let sumJetMax = 0;
-  for (const data of Object.values(tracker.jets || {})){
-    totalCurrent += n(data.current);
-    sumJetMax += n(data.max);
-  }
-  // if totalMax not set, fall back to sum of jet max
-  if (!totalMax) totalMax = sumJetMax;
-
-  return { totalCurrent, totalMax, sumJetMax };
-}
-
 function pct(current, max){
   if (max <= 0) return 0;
   return Math.max(0, Math.min(1, current / max));
+}
+
+function computeTotals(tracker){
+  let totalCurrent = 0;
+  let totalTarget = tracker.totalTarget != null ? n(tracker.totalTarget) : 0;
+
+  let sumJetTargets = 0;
+  for (const jet of Object.values(tracker.jets || {})){
+    totalCurrent += n(jet.current);
+    sumJetTargets += n(jet.target);
+  }
+
+  // If totalTarget is not set, fall back to sum of per-jet targets
+  if (!totalTarget) totalTarget = sumJetTargets;
+
+  return { totalCurrent, totalTarget, sumJetTargets };
+}
+
+async function mutateTracker(id, mutateFn){
+  const trackers = await loadTrackers();
+  if (!trackers[id]) return;
+
+  const next = { ...(trackers || {}) };
+  const updated = mutateFn(next[id]);
+  next[id] = updated;
+  await saveTrackers(next);
+  await render();
 }
 
 async function render(){
@@ -78,36 +104,43 @@ async function render(){
   }
 
   for (const [id, tracker] of entries){
-    const linkedName = await getChecklistName(tracker.checklistItemId);
+    const linkedName = await getChecklistItemName(tracker.checklistItemId);
     const displayName = tracker.name || linkedName || 'Run Tracker';
 
-    const { totalCurrent, totalMax } = computeTotals(tracker);
-    const totalDiff = totalCurrent - totalMax;
+    const { totalCurrent, totalTarget } = computeTotals(tracker);
+    const totalDiff = totalCurrent - totalTarget;
 
     const card = el('div',{class:'tracker'});
 
     const headLeft = el('div',{},[
       el('div',{class:'title',text:displayName}),
       el('div',{class:'sub',text: tracker.checklistItemId
-        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked checklist item not found')
+        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked checklist item not found / not accessible')
         : 'Not linked'})
     ]);
 
     const actions = el('div',{class:'actions'},[
       el('button',{
         class:'btn',
+        text: tracker.collapsed ? 'Expand' : 'Collapse',
+        onclick: async () => {
+          await mutateTracker(id, (tr) => ({ ...tr, collapsed: !tr.collapsed }));
+        }
+      }),
+      el('button',{
+        class:'btn',
         text:'Edit',
         onclick: () => t.popup({
           title:'Edit Run Tracker',
           url: t.signUrl(`./create.html?mode=edit&id=${encodeURIComponent(id)}`),
-          height: 560
+          height: 640
         })
       }),
       el('button',{
         class:'btn btnDanger',
         text:'Delete',
         onclick: async () => {
-          const next = {...(trackers||{})};
+          const next = { ...(trackers || {}) };
           delete next[id];
           await saveTrackers(next);
           await render();
@@ -125,25 +158,31 @@ async function render(){
     const totalBox = el('div',{class:'totalBox'});
     totalBox.appendChild(el('div',{class:'totalTop'},[
       el('div',{text:'Total Run Count'}),
-      el('div',{text:`${fmt(totalCurrent)} / ${fmt(totalMax)}`})
+      el('div',{text:`${fmt(totalCurrent)} / ${fmt(totalTarget)}`})
     ]));
     totalBox.appendChild(el('div',{},[pill]));
 
     const totalBarWrap = el('div',{class:`barWrap ${totalDiff>0?'barOver':''}`});
     const totalBarFill = el('div',{class:'barFill'});
-    totalBarFill.style.width = (pct(totalCurrent,totalMax)*100).toFixed(0)+'%';
+    totalBarFill.style.width = (pct(totalCurrent,totalTarget)*100).toFixed(0)+'%';
     totalBarWrap.appendChild(totalBarFill);
     totalBox.appendChild(totalBarWrap);
 
     card.appendChild(totalBox);
+
+    if (tracker.collapsed){
+      card.appendChild(el('div',{class:'collapsedNote',text:'Tracker collapsed. Expand to see per-jet controls.'}));
+      container.appendChild(card);
+      continue;
+    }
 
     // JETS
     const jetsWrap = el('div',{class:'jets'});
 
     for (const [jetName, data] of Object.entries(tracker.jets || {})){
       const currentVal = n(data.current);
-      const maxVal = n(data.max);
-      const diff = currentVal - maxVal;
+      const targetVal = n(data.target);
+      const diff = currentVal - targetVal;
 
       let statusText = 'ON TARGET';
       let statusClass = '';
@@ -159,7 +198,7 @@ async function render(){
 
       const barWrap = el('div',{class:`barWrap ${diff>0?'barOver':''}`});
       const barFill = el('div',{class:'barFill'});
-      barFill.style.width = (pct(currentVal,maxVal)*100).toFixed(0)+'%';
+      barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
       barWrap.appendChild(barFill);
       row.appendChild(barWrap);
 
@@ -172,11 +211,12 @@ async function render(){
       });
 
       const applyValue = async (newVal) => {
-        data.current = n(newVal);
-        tracker.jets[jetName] = data;
-        const next = {...(trackers||{})};
-        next[id] = tracker;
-        await saveTrackers(next);
+        const trackers2 = await loadTrackers();
+        const tr = trackers2[id];
+        if (!tr?.jets?.[jetName]) return;
+
+        tr.jets[jetName].current = round3(newVal);
+        await saveTrackers(trackers2);
         await render();
       };
 
@@ -189,7 +229,7 @@ async function render(){
         minus,
         input,
         plus,
-        el('div',{class:'max',text:`/ ${fmt(maxVal)}`})
+        el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
       ]));
 
       jetsWrap.appendChild(row);
@@ -204,3 +244,6 @@ async function render(){
 
 t.render(() => render());
 window.addEventListener('focus', () => render());
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) render();
+});

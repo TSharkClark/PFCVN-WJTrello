@@ -1,11 +1,14 @@
 {
   "name": "Waterjet Run Tracker",
-  "details": "Run counters per Waterjet with totals and checklist linking.",
+  "details": "Run counters per Waterjet with totals, per-jet targets, and optional checklist linking.",
   "author": "Tristen",
   "icon": {
     "url": "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"
   },
   "capabilities": {
+    "on-enable": {
+      "url": "index.html"
+    },
     "card-buttons": {
       "url": "index.html"
     },

@@ -9,7 +9,12 @@
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
     <script>
       /* global TrelloPowerUp */
-      const t = TrelloPowerUp.initialize({
+
+      TrelloPowerUp.initialize({
+        "on-enable": function () {
+          return Promise.resolve();
+        },
+
         "card-buttons": function (t) {
           return [{
             icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
@@ -18,7 +23,7 @@
               return t.popup({
                 title: "Create Run Tracker",
                 url: t.signUrl("./create.html"),
-                height: 560
+                height: 640
               });
             }
           }];
