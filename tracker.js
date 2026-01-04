@@ -23,12 +23,8 @@ function el(tag, attrs = {}, children = []){
   return node;
 }
 
-async function loadTrackers(){
-  return await t.get('card','shared',STORAGE_KEY,{});
-}
-async function saveTrackers(trackers){
-  await t.set('card','shared',STORAGE_KEY,trackers);
-}
+async function loadTrackers(){ return await t.get('card','shared',STORAGE_KEY,{}); }
+async function saveTrackers(trackers){ await t.set('card','shared',STORAGE_KEY,trackers); }
 
 function upgradeTrackerSchema(tr){
   if (!tr) return tr;
@@ -41,13 +37,29 @@ function upgradeTrackerSchema(tr){
     delete v.max;
   }
 
+  const breakdowns = Array.isArray(tr.breakdowns) ? tr.breakdowns.map(b => {
+    const bj = { ...(b.jets || {}) };
+    for (const [k,v] of Object.entries(bj)){
+      if (!v || typeof v !== 'object') continue;
+      if (v.target == null && v.max != null) v.target = v.max;
+      if (v.current == null) v.current = 0;
+      delete v.max;
+    }
+    return {
+      id: b.id || ('bd_' + Math.random().toString(16).slice(2)),
+      name: b.name ?? '',
+      totalTarget: b.totalTarget ?? b.totalMax ?? 0,
+      jets: bj
+    };
+  }) : [];
+
   return {
     ...tr,
     totalTarget: tr.totalTarget ?? tr.totalMax ?? 0,
     autoSplit: tr.autoSplit ?? false,
     collapsed: tr.collapsed ?? false,
     jets,
-    // new: snapshot name so it never "looks unlinked"
+    breakdowns,
     checklistItemName: tr.checklistItemName ?? null
   };
 }
@@ -68,11 +80,10 @@ async function loadUpgradedTrackers(){
   return out;
 }
 
-// Reliable checklist item name: REST when authorized, fallback to hydrated card data
+// REST-first checklist name (stable)
 async function getChecklistItemName(itemId){
   if (!itemId) return null;
 
-  // 1) REST API path (most reliable)
   try{
     const rest = t.getRestApi();
     const ok = await rest.isAuthorized();
@@ -83,29 +94,9 @@ async function getChecklistItemName(itemId){
         fields: 'name',
         checkItem_fields: 'name'
       });
-
       for (const cl of (checklists || [])){
         for (const it of (cl.checkItems || [])){
           if (it.id === itemId) return it.name;
-        }
-      }
-    }
-  }catch{ /* ignore */ }
-
-  // 2) Fallback: Trello hydrated data (flaky but better than nothing)
-  try{
-    const candidates = [];
-    candidates.push(await t.card('checklists'));
-    candidates.push(await t.card('all'));
-
-    for (const card of candidates){
-      const lists = card?.checklists || [];
-      for (const cl of lists){
-        const items = cl?.checkItems || cl?.items || cl?.checkItemStates || [];
-        for (const it of items){
-          const id = it?.id || it?.idCheckItem;
-          const name = it?.name;
-          if (id === itemId && name) return name;
         }
       }
     }
@@ -119,18 +110,36 @@ function pct(current, max){
   return Math.max(0, Math.min(1, current / max));
 }
 
-function computeTotals(tracker){
-  let totalCurrent = 0;
-  let totalTarget = tracker.totalTarget != null ? n(tracker.totalTarget) : 0;
+function sumJets(jets){
+  let current = 0;
+  let target = 0;
+  for (const j of Object.values(jets || {})){
+    current += n(j.current);
+    target += n(j.target);
+  }
+  return { current, target };
+}
 
-  let sumJetTargets = 0;
-  for (const jet of Object.values(tracker.jets || {})){
-    totalCurrent += n(jet.current);
-    sumJetTargets += n(jet.target);
+function computeTrackerTotals(tr){
+  // If breakdowns exist, totals come from breakdown jet totals
+  if (Array.isArray(tr.breakdowns) && tr.breakdowns.length){
+    let cur = 0, tgt = 0;
+    for (const b of tr.breakdowns){
+      const s = sumJets(b.jets || {});
+      cur += s.current;
+      // prefer breakdown totalTarget if set, otherwise sum of jet targets
+      const bt = n(b.totalTarget) || s.target;
+      tgt += bt;
+    }
+    // If tracker.totalTarget explicitly set, use it; else use breakdown sum
+    const trackerTarget = n(tr.totalTarget) || tgt;
+    return { totalCurrent: cur, totalTarget: trackerTarget, breakdownTargetSum: tgt };
   }
 
-  if (!totalTarget) totalTarget = sumJetTargets;
-  return { totalCurrent, totalTarget };
+  // No breakdowns: classic
+  const s = sumJets(tr.jets || {});
+  const tgt = n(tr.totalTarget) || s.target;
+  return { totalCurrent: s.current, totalTarget: tgt, breakdownTargetSum: 0 };
 }
 
 function openCreateModal(){
@@ -138,16 +147,15 @@ function openCreateModal(){
     title: 'Create Run Tracker',
     url: t.signUrl('./create.html'),
     fullscreen: false,
-    height: 680
+    height: 700
   });
 }
-
 function openEditModal(id){
   return t.modal({
     title: 'Edit Run Tracker',
     url: t.signUrl(`./create.html?mode=edit&id=${encodeURIComponent(id)}`),
     fullscreen: false,
-    height: 680
+    height: 700
   });
 }
 
@@ -158,6 +166,13 @@ async function mutateTracker(id, mutateFn){
   next[id] = mutateFn(next[id]);
   await saveTrackers(next);
   await render();
+}
+
+function statusFor(currentVal, targetVal){
+  const diff = n(currentVal) - n(targetVal);
+  if (diff > 0) return { text:`OVER +${fmt(diff)}`, cls:'statusOver', over:true };
+  if (diff < 0) return { text:`UNDER ${fmt(Math.abs(diff))}`, cls:'statusUnder', over:false };
+  return { text:'ON TARGET', cls:'', over:false };
 }
 
 async function render(){
@@ -176,18 +191,20 @@ async function render(){
   }
 
   for (const [id, tracker] of entries){
-    // Try live name, otherwise fallback to stored snapshot
+    // stable linked name: REST -> snapshot
     const liveLinkedName = await getChecklistItemName(tracker.checklistItemId);
     const linkedName = liveLinkedName || tracker.checklistItemName || null;
 
-    // If we recovered a name via REST/hydration, store snapshot so it won't "disappear" later
     if (tracker.checklistItemId && liveLinkedName && tracker.checklistItemName !== liveLinkedName){
-      // Fire-and-forget save (don’t block render)
+      // update snapshot
       mutateTracker(id, (tr) => ({ ...tr, checklistItemName: liveLinkedName }));
     }
 
     const displayName = tracker.name || linkedName || 'Run Tracker';
-    const { totalCurrent, totalTarget } = computeTotals(tracker);
+
+    const totals = computeTrackerTotals(tracker);
+    const totalCurrent = totals.totalCurrent;
+    const totalTarget = totals.totalTarget;
     const totalDiff = totalCurrent - totalTarget;
 
     const card = el('div',{class:'tracker'});
@@ -243,34 +260,111 @@ async function render(){
     totalBarFill.style.width = (pct(totalCurrent,totalTarget)*100).toFixed(0)+'%';
     totalBarWrap.appendChild(totalBarFill);
     totalBox.appendChild(totalBarWrap);
+
     card.appendChild(totalBox);
 
     if (tracker.collapsed){
-      card.appendChild(el('div',{class:'collapsedNote',text:'Collapsed. Expand to see per-jet controls.'}));
+      card.appendChild(el('div',{class:'collapsedNote',text:'Collapsed. Expand to see controls.'}));
       container.appendChild(card);
       continue;
     }
 
-    const jetsWrap = el('div',{class:'jets'});
+    // ---------- BREAKDOWNS MODE ----------
+    if (Array.isArray(tracker.breakdowns) && tracker.breakdowns.length){
+      card.appendChild(el('div',{class:'sectionTitle',text:'Run Breakdown'}));
 
+      for (const bd of tracker.breakdowns){
+        const bdJets = bd.jets || {};
+        const s = sumJets(bdJets);
+        const bdTarget = n(bd.totalTarget) || s.target;
+        const bdDiff = s.current - bdTarget;
+
+        const bdBox = el('div',{class:'breakdown'});
+
+        bdBox.appendChild(el('div',{class:'breakdownHeader'},[
+          el('div',{class:'bdName',text: bd.name || 'Breakdown'}),
+          el('div',{class:'bdMeta',text:`${fmt(s.current)} / ${fmt(bdTarget)}`})
+        ]));
+
+        const bdBarWrap = el('div',{class:`barWrap ${bdDiff>0?'barOver':''}`});
+        const bdBarFill = el('div',{class:'barFill'});
+        bdBarFill.style.width = (pct(s.current, bdTarget)*100).toFixed(0)+'%';
+        bdBarWrap.appendChild(bdBarFill);
+        bdBox.appendChild(bdBarWrap);
+
+        const jetsWrap = el('div',{class:'jets'});
+        for (const [jetName, data] of Object.entries(bdJets)){
+          const currentVal = n(data.current);
+          const targetVal = n(data.target);
+          const st = statusFor(currentVal, targetVal);
+
+          const row = el('div',{class:'jetRow'});
+
+          row.appendChild(el('div',{class:'jetHeader'},[
+            el('div',{class:'jetName',text:jetName}),
+            el('div',{class:`status ${st.cls}`,text:st.text})
+          ]));
+
+          const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
+          const barFill = el('div',{class:'barFill'});
+          barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
+          barWrap.appendChild(barFill);
+          row.appendChild(barWrap);
+
+          const input = el('input',{
+            class:'num',
+            type:'number',
+            step:'any',
+            inputmode:'decimal',
+            value: fmt(currentVal)
+          });
+
+          const applyValue = async (newVal) => {
+            const trackers2 = await loadUpgradedTrackers();
+            const tr = trackers2[id];
+            const b = (tr.breakdowns || []).find(x => x.id === bd.id);
+            if (!b?.jets?.[jetName]) return;
+            b.jets[jetName].current = round3(newVal);
+            await saveTrackers(trackers2);
+            await render();
+          };
+
+          const minus = el('button',{type:'button',class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
+          const plus  = el('button',{type:'button',class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
+
+          input.addEventListener('change', e => applyValue(e.target.value));
+
+          row.appendChild(el('div',{class:'controls'},[
+            minus, input, plus,
+            el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
+          ]));
+
+          jetsWrap.appendChild(row);
+        }
+
+        bdBox.appendChild(jetsWrap);
+        card.appendChild(bdBox);
+      }
+
+      container.appendChild(card);
+      continue;
+    }
+
+    // ---------- CLASSIC MODE (NO BREAKDOWNS) ----------
+    const jetsWrap = el('div',{class:'jets'});
     for (const [jetName, data] of Object.entries(tracker.jets || {})){
       const currentVal = n(data.current);
       const targetVal = n(data.target);
-      const diff = currentVal - targetVal;
-
-      let statusText = 'ON TARGET';
-      let statusClass = '';
-      if (diff > 0){ statusText = `OVER +${fmt(diff)}`; statusClass = 'statusOver'; }
-      else if (diff < 0){ statusText = `UNDER ${fmt(Math.abs(diff))}`; statusClass = 'statusUnder'; }
+      const st = statusFor(currentVal, targetVal);
 
       const row = el('div',{class:'jetRow'});
 
       row.appendChild(el('div',{class:'jetHeader'},[
         el('div',{class:'jetName',text:jetName}),
-        el('div',{class:`status ${statusClass}`,text:statusText})
+        el('div',{class:`status ${st.cls}`,text:st.text})
       ]));
 
-      const barWrap = el('div',{class:`barWrap ${diff>0?'barOver':''}`});
+      const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
       const barFill = el('div',{class:'barFill'});
       barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
       barWrap.appendChild(barFill);
@@ -299,9 +393,7 @@ async function render(){
       input.addEventListener('change', e => applyValue(e.target.value));
 
       row.appendChild(el('div',{class:'controls'},[
-        minus,
-        input,
-        plus,
+        minus, input, plus,
         el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
       ]));
 

@@ -1,6 +1,6 @@
 {
   "name": "Waterjet Run Tracker",
-  "details": "Per-card run trackers with total + Waterjet 1/2/3, decimals, auto-split targets, edit, collapse, and optional checklist link.",
+  "details": "Per-card run trackers with total + Waterjet 1/2/3, decimals, breakdowns (sub-counters), edit, collapse, and optional checklist link.",
   "author": "Tristen",
   "icon": {
     "url": "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"

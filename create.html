@@ -33,30 +33,20 @@
     }
 
     .wrap{
-      padding:14px 14px 86px 14px;
-      max-width: 880px;
+      padding:14px 14px 92px 14px;
+      max-width: 980px;
       margin: 0 auto;
     }
 
-    h2{
-      margin:0 0 6px 0;
-      font-weight:950;
-      letter-spacing:-0.2px;
-    }
-    .muted{
-      color:var(--muted);
-      font-weight:800;
-      font-size:13px;
-      margin-bottom:14px;
-      line-height:1.35;
-    }
+    h2{ margin:0 0 6px 0; font-weight:950; letter-spacing:-0.2px; }
+    .muted{ color:var(--muted); font-weight:800; font-size:13px; margin-bottom:14px; line-height:1.35; }
 
     .grid{
       display:grid;
-      grid-template-columns: 1.2fr 0.8fr;
+      grid-template-columns: 1.1fr 0.9fr;
       gap:14px;
     }
-    @media (max-width: 860px){
+    @media (max-width: 900px){
       .grid{ grid-template-columns: 1fr; }
     }
 
@@ -95,6 +85,41 @@
     }
     .row > div{ flex:1; min-width: 220px; }
 
+    .btn{
+      height:42px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
+      font-weight:950;
+      cursor:pointer;
+      padding:0 14px;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
+
+    .btnSmall{
+      height:36px;
+      padding:0 12px;
+      border-radius:10px;
+      font-size:13px;
+      font-weight:950;
+    }
+
+    .btnDanger{
+      border-color:#ffb3be;
+      background:#fff;
+      color:var(--danger);
+    }
+    .btnDanger:hover{
+      border-color:var(--danger);
+      color:var(--danger);
+    }
+
     .chips{
       display:flex;
       gap:10px;
@@ -122,69 +147,24 @@
       color:#fff;
     }
 
-    .jetsBox{
-      margin-top:12px;
-      border:1px solid var(--border);
-      border-radius:14px;
-      background:var(--soft);
-      padding:12px;
-    }
-
-    .jetLine{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:12px;
-      padding:10px 0;
-      border-bottom:1px solid #e0e0e0;
-    }
-    .jetLine:last-child{ border-bottom:none; }
-
-    .jetName{
-      font-weight:950;
-      min-width: 120px;
-    }
-
-    .jetTarget{
-      width: 220px;
-      height: 42px;
-      border-radius:12px;
-      border:1px solid var(--border);
-      padding:0 12px;
-      font-weight:950;
-      text-align:center;
-      background:#fff;
-    }
-
-    .btn{
-      height:42px;
-      border-radius:12px;
-      border:1px solid var(--border);
-      background:var(--btn-bg);
-      color:var(--btn-text);
-      font-weight:950;
-      cursor:pointer;
-      padding:0 14px;
-      user-select:none;
-    }
-    .btn:hover{
-      border-color:var(--btn-hover);
-      color:var(--btn-hover);
+    .warn{
+      margin-top:10px;
+      color:var(--danger);
+      font-weight:900;
+      font-size:13px;
+      display:none;
     }
 
     .stickyBar{
       position:fixed;
-      left:0;
-      right:0;
-      bottom:0;
+      left:0; right:0; bottom:0;
       background:#fff;
       border-top:1px solid var(--border);
       padding:10px 14px;
       box-shadow: 0 -8px 20px rgba(0,0,0,0.06);
     }
-
     .stickyInner{
-      max-width: 880px;
+      max-width: 980px;
       margin:0 auto;
       display:flex;
       gap:10px;
@@ -208,12 +188,70 @@
       border-color:var(--primary-hover);
     }
 
-    .warn{
-      margin-top:10px;
-      color:var(--danger);
-      font-weight:900;
+    .sectionTitle{
+      margin-top:12px;
+      font-weight:950;
+      color:var(--muted);
       font-size:13px;
-      display:none;
+    }
+
+    .panel{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:var(--soft);
+      padding:12px;
+      margin-top:10px;
+    }
+
+    .jetLine{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:8px 0;
+      border-bottom:1px solid #e0e0e0;
+    }
+    .jetLine:last-child{ border-bottom:none; }
+    .jetName{ font-weight:950; min-width:120px; }
+    .jetTarget{
+      width: 180px;
+      height: 40px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      padding:0 12px;
+      font-weight:950;
+      text-align:center;
+      background:#fff;
+    }
+
+    .bdCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fff;
+      padding:12px;
+      margin-top:10px;
+    }
+
+    .bdTop{
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+    }
+    .bdTop > div{ flex:1; min-width: 220px; }
+
+    .bdHeaderRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+    }
+
+    .bdHeader{
+      font-weight:950;
+      color:var(--muted);
+      font-size:13px;
     }
   </style>
 
@@ -223,34 +261,51 @@
 <body>
   <div class="wrap">
     <h2 id="title">Create Run Tracker</h2>
-    <div class="muted" id="subtitle">Pick jets, set total target, optionally link a checklist item. Decimals allowed.</div>
+    <div class="muted" id="subtitle">Pick jets, set targets, optionally link a checklist item. Use “Run Breakdown” for file/variant splits.</div>
 
     <div class="grid">
       <div class="card">
         <label>Tracker name (optional)</label>
-        <input id="name" placeholder="Example: Phase A, Solo Jet 1, etc." />
+        <input id="name" placeholder="Example: I-50 Shield / Phase A / etc." />
 
         <label>Link to checklist item (optional)</label>
-        <select id="checklist">
-          <option value="">— Not linked —</option>
-        </select>
+        <div class="row" style="gap:10px;">
+          <div style="flex:1; min-width:240px;">
+            <select id="checklist">
+              <option value="">— Not linked —</option>
+            </select>
+          </div>
+          <div style="flex:0; min-width:220px;">
+            <button class="btn" id="authBtn" type="button" style="display:none;">Authorize (fix checklist)</button>
+          </div>
+        </div>
 
         <div class="row">
           <div>
-            <label>Total target</label>
-            <input id="totalTarget" type="number" step="any" value="38.8" />
+            <label>Total target (optional)</label>
+            <input id="totalTarget" type="number" step="any" value="" placeholder="Leave blank to use sum of targets" />
           </div>
           <div>
             <label>Auto-split targets</label>
             <select id="autoSplit">
-              <option value="on" selected>On (split from Total)</option>
-              <option value="off">Off (manual per-jet)</option>
+              <option value="on" selected>On (split from total)</option>
+              <option value="off">Off</option>
             </select>
           </div>
         </div>
 
         <div class="row" style="margin-top:12px;">
           <button class="btn" id="applyAuto" type="button">Apply Auto-Split</button>
+        </div>
+
+        <div class="sectionTitle">Run Breakdown (optional)</div>
+        <div class="muted" style="margin:6px 0 0 0;">
+          Use this when one item has multiple files/variants and you want per-jet counters for each.
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="addBreakdownBtn" type="button">+ Add Breakdown</button>
+          <button class="btn btnDanger" id="clearBreakdownsBtn" type="button">Remove all breakdowns</button>
         </div>
 
         <div class="warn" id="warn"></div>
@@ -260,8 +315,15 @@
         <label>Jets to include</label>
         <div class="chips" id="jetToggles"></div>
 
-        <label style="margin-top:14px;">Per-jet targets</label>
-        <div class="jetsBox" id="jetsBox"></div>
+        <div id="simpleTargetsWrap">
+          <div class="sectionTitle">Per-jet targets (no breakdown)</div>
+          <div class="panel" id="jetsBox"></div>
+        </div>
+
+        <div id="breakdownsWrap" style="display:none;">
+          <div class="sectionTitle">Breakdown targets (per-jet)</div>
+          <div id="breakdownsBox"></div>
+        </div>
       </div>
     </div>
   </div>
