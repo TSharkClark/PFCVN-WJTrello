@@ -33,8 +33,8 @@
     }
 
     .wrap{
-      padding:16px 16px 96px 16px;
-      max-width: 980px;
+      padding:14px 14px 86px 14px;
+      max-width: 880px;
       margin: 0 auto;
     }
 
@@ -76,7 +76,7 @@
 
     input, select{
       width:100%;
-      height:46px;
+      height:44px;
       border:1px solid var(--border);
       border-radius:12px;
       padding:0 12px;
@@ -107,7 +107,7 @@
       background:var(--btn-bg);
       color:var(--btn-text);
       border-radius:999px;
-      padding:12px 14px;
+      padding:10px 12px;
       font-weight:950;
       cursor:pointer;
       user-select:none;
@@ -147,7 +147,7 @@
 
     .jetTarget{
       width: 220px;
-      height: 44px;
+      height: 42px;
       border-radius:12px;
       border:1px solid var(--border);
       padding:0 12px;
@@ -157,7 +157,7 @@
     }
 
     .btn{
-      height:44px;
+      height:42px;
       border-radius:12px;
       border:1px solid var(--border);
       background:var(--btn-bg);
@@ -179,12 +179,12 @@
       bottom:0;
       background:#fff;
       border-top:1px solid var(--border);
-      padding:12px 16px;
+      padding:10px 14px;
       box-shadow: 0 -8px 20px rgba(0,0,0,0.06);
     }
 
     .stickyInner{
-      max-width: 980px;
+      max-width: 880px;
       margin:0 auto;
       display:flex;
       gap:10px;
@@ -193,8 +193,8 @@
     }
 
     .saveBtn{
-      min-width: 240px;
-      height:48px;
+      min-width: 220px;
+      height:46px;
       border-radius:14px;
       border:1px solid var(--primary-bg);
       background:var(--primary-bg);
@@ -214,14 +214,6 @@
       font-weight:900;
       font-size:13px;
       display:none;
-    }
-
-    .tiny{
-      font-size:12px;
-      color:var(--muted);
-      font-weight:800;
-      margin-top:8px;
-      line-height:1.35;
     }
   </style>
 
@@ -246,7 +238,7 @@
         <div class="row">
           <div>
             <label>Total target</label>
-            <input id="totalTarget" type="number" step="any" value="0" />
+            <input id="totalTarget" type="number" step="any" value="38.8" />
           </div>
           <div>
             <label>Auto-split targets</label>
@@ -262,9 +254,6 @@
         </div>
 
         <div class="warn" id="warn"></div>
-        <div class="tiny">
-          Tip: With Auto-split ON, changing Total or jets will re-split if you click Apply. You can still override per-jet targets.
-        </div>
       </div>
 
       <div class="card">

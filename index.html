@@ -9,10 +9,23 @@
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
     <script>
       /* global TrelloPowerUp */
-
       TrelloPowerUp.initialize({
         "on-enable": function () {
           return Promise.resolve();
+        },
+
+        "authorization-status": function (t) {
+          return t.getRestApi().isAuthorized().then(function (authorized) {
+            return { authorized: authorized };
+          });
+        },
+
+        "show-authorization": function (t) {
+          return t.authorize({
+            scope: { read: true, write: false },
+            expiration: "never",
+            name: "Waterjet Run Tracker"
+          });
         },
 
         "card-buttons": function (t) {
@@ -23,8 +36,8 @@
               return t.modal({
                 title: "Create Run Tracker",
                 url: t.signUrl("./create.html"),
-                fullscreen: true,
-                height: 760
+                fullscreen: false,
+                height: 680
               });
             }
           }];

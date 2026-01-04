@@ -6,15 +6,10 @@
     "url": "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"
   },
   "capabilities": {
-    "on-enable": {
-      "url": "index.html"
-    },
-    "card-buttons": {
-      "url": "index.html"
-    },
-    "card-back-section": {
-      "url": "index.html",
-      "height": 620
-    }
+    "on-enable": { "url": "index.html" },
+    "card-buttons": { "url": "index.html" },
+    "card-back-section": { "url": "index.html", "height": 620 },
+    "authorization-status": { "url": "index.html" },
+    "show-authorization": { "url": "index.html" }
   }
 }

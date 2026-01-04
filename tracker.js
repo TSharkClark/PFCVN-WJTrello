@@ -16,7 +16,6 @@ function el(tag, attrs = {}, children = []){
   for (const [k,v] of Object.entries(attrs)){
     if (k === 'class') node.className = v;
     else if (k === 'text') node.textContent = v;
-    else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v);
   }
@@ -34,7 +33,6 @@ async function saveTrackers(trackers){
 function upgradeTrackerSchema(tr){
   if (!tr) return tr;
 
-  // old schema: totalMax + jets[jet].max
   const jets = { ...(tr.jets || {}) };
   for (const [k,v] of Object.entries(jets)){
     if (!v || typeof v !== 'object') continue;
@@ -48,15 +46,17 @@ function upgradeTrackerSchema(tr){
     totalTarget: tr.totalTarget ?? tr.totalMax ?? 0,
     autoSplit: tr.autoSplit ?? false,
     collapsed: tr.collapsed ?? false,
-    jets
+    jets,
+    // new: snapshot name so it never "looks unlinked"
+    checklistItemName: tr.checklistItemName ?? null
   };
 }
 
 async function loadUpgradedTrackers(){
   const trackers = await loadTrackers();
   let changed = false;
-
   const out = { ...(trackers || {}) };
+
   for (const [id,tr] of Object.entries(out)){
     const up = upgradeTrackerSchema(tr);
     if (JSON.stringify(up) !== JSON.stringify(tr)) {
@@ -68,24 +68,49 @@ async function loadUpgradedTrackers(){
   return out;
 }
 
+// Reliable checklist item name: REST when authorized, fallback to hydrated card data
 async function getChecklistItemName(itemId){
   if (!itemId) return null;
 
-  const candidates = [];
-  try { candidates.push(await t.card('checklists')); } catch {}
-  try { candidates.push(await t.card('all')); } catch {}
+  // 1) REST API path (most reliable)
+  try{
+    const rest = t.getRestApi();
+    const ok = await rest.isAuthorized();
+    if (ok){
+      const card = await t.card('id');
+      const checklists = await rest.get(`/cards/${card.id}/checklists`, {
+        checkItems: 'all',
+        fields: 'name',
+        checkItem_fields: 'name'
+      });
 
-  for (const card of candidates){
-    const lists = card?.checklists || [];
-    for (const cl of lists){
-      const items = cl?.checkItems || cl?.items || cl?.checkItemStates || [];
-      for (const it of items){
-        const id = it?.id || it?.idCheckItem;
-        const name = it?.name;
-        if (id === itemId && name) return name;
+      for (const cl of (checklists || [])){
+        for (const it of (cl.checkItems || [])){
+          if (it.id === itemId) return it.name;
+        }
       }
     }
-  }
+  }catch{ /* ignore */ }
+
+  // 2) Fallback: Trello hydrated data (flaky but better than nothing)
+  try{
+    const candidates = [];
+    candidates.push(await t.card('checklists'));
+    candidates.push(await t.card('all'));
+
+    for (const card of candidates){
+      const lists = card?.checklists || [];
+      for (const cl of lists){
+        const items = cl?.checkItems || cl?.items || cl?.checkItemStates || [];
+        for (const it of items){
+          const id = it?.id || it?.idCheckItem;
+          const name = it?.name;
+          if (id === itemId && name) return name;
+        }
+      }
+    }
+  }catch{ /* ignore */ }
+
   return null;
 }
 
@@ -104,9 +129,7 @@ function computeTotals(tracker){
     sumJetTargets += n(jet.target);
   }
 
-  // fallback: if total target not set, use sum of jet targets
   if (!totalTarget) totalTarget = sumJetTargets;
-
   return { totalCurrent, totalTarget };
 }
 
@@ -114,8 +137,8 @@ function openCreateModal(){
   return t.modal({
     title: 'Create Run Tracker',
     url: t.signUrl('./create.html'),
-    fullscreen: true,
-    height: 760
+    fullscreen: false,
+    height: 680
   });
 }
 
@@ -123,15 +146,14 @@ function openEditModal(id){
   return t.modal({
     title: 'Edit Run Tracker',
     url: t.signUrl(`./create.html?mode=edit&id=${encodeURIComponent(id)}`),
-    fullscreen: true,
-    height: 760
+    fullscreen: false,
+    height: 680
   });
 }
 
 async function mutateTracker(id, mutateFn){
   const trackers = await loadUpgradedTrackers();
   if (!trackers[id]) return;
-
   const next = { ...(trackers || {}) };
   next[id] = mutateFn(next[id]);
   await saveTrackers(next);
@@ -147,7 +169,6 @@ async function render(){
   container.innerHTML = '';
 
   const entries = Object.entries(trackers || {});
-
   if (entries.length === 0){
     container.appendChild(el('div',{class:'empty',text:'No trackers yet. Click “+ Add Tracker” above.'}));
     t.sizeTo(document.body);
@@ -155,9 +176,17 @@ async function render(){
   }
 
   for (const [id, tracker] of entries){
-    const linkedName = await getChecklistItemName(tracker.checklistItemId);
-    const displayName = tracker.name || linkedName || 'Run Tracker';
+    // Try live name, otherwise fallback to stored snapshot
+    const liveLinkedName = await getChecklistItemName(tracker.checklistItemId);
+    const linkedName = liveLinkedName || tracker.checklistItemName || null;
 
+    // If we recovered a name via REST/hydration, store snapshot so it won't "disappear" later
+    if (tracker.checklistItemId && liveLinkedName && tracker.checklistItemName !== liveLinkedName){
+      // Fire-and-forget save (don’t block render)
+      mutateTracker(id, (tr) => ({ ...tr, checklistItemName: liveLinkedName }));
+    }
+
+    const displayName = tracker.name || linkedName || 'Run Tracker';
     const { totalCurrent, totalTarget } = computeTotals(tracker);
     const totalDiff = totalCurrent - totalTarget;
 
@@ -166,7 +195,7 @@ async function render(){
     const headLeft = el('div',{},[
       el('div',{class:'title',text:displayName}),
       el('div',{class:'sub',text: tracker.checklistItemId
-        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked checklist item not found / not hydrated')
+        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked (name unavailable — authorize for stable linking)')
         : 'Not linked'})
     ]);
 
@@ -175,19 +204,13 @@ async function render(){
         type:'button',
         class:'btn',
         text: tracker.collapsed ? 'Expand' : 'Collapse',
-        onclick: async () => {
-          await mutateTracker(id, (tr) => ({ ...tr, collapsed: !tr.collapsed }));
-        }
+        onclick: async () => mutateTracker(id, (tr) => ({ ...tr, collapsed: !tr.collapsed }))
       }),
       el('button',{
         type:'button',
         class:'btn',
         text:'Edit',
-        onclick: async () => {
-          await openEditModal(id);
-          // when modal closes, re-render so changes show immediately
-          await render();
-        }
+        onclick: async () => { await openEditModal(id); await render(); }
       }),
       el('button',{
         type:'button',
@@ -204,7 +227,6 @@ async function render(){
 
     card.appendChild(el('div',{class:'head'},[headLeft, actions]));
 
-    // TOTAL
     const pill = totalDiff > 0
       ? el('span',{class:'pill pillOver',text:`TOTAL OVER +${fmt(totalDiff)}`})
       : el('span',{class:'pill pillUnder',text:`Remaining ${fmt(Math.abs(totalDiff))}`});
@@ -221,7 +243,6 @@ async function render(){
     totalBarFill.style.width = (pct(totalCurrent,totalTarget)*100).toFixed(0)+'%';
     totalBarWrap.appendChild(totalBarFill);
     totalBox.appendChild(totalBarWrap);
-
     card.appendChild(totalBox);
 
     if (tracker.collapsed){
@@ -230,7 +251,6 @@ async function render(){
       continue;
     }
 
-    // JETS
     const jetsWrap = el('div',{class:'jets'});
 
     for (const [jetName, data] of Object.entries(tracker.jets || {})){
@@ -297,16 +317,9 @@ async function render(){
 
 t.render(async () => {
   const addBtn = document.getElementById('addTrackerBtn');
-  if (addBtn) {
-    addBtn.onclick = async () => {
-      await openCreateModal();
-      await render();
-    };
-  }
+  if (addBtn) addBtn.onclick = async () => { await openCreateModal(); await render(); };
   await render();
 });
 
 window.addEventListener('focus', () => render());
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) render();
-});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
