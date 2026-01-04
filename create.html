@@ -6,145 +6,160 @@
   <title>Run Tracker</title>
 
   <style>
-    body{
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin:0;
-      padding:12px 12px 90px 12px; /* leave room for sticky save bar */
-      color:#111;
-      background:#fff;
-    }
+   :root{
+  --bg:#ffffff;
+  --text:#111111;
+  --muted:#555555;
 
-    h3{ margin:0 0 6px 0; font-weight:950; }
-    .muted{ color:#666; font-weight:800; font-size:12px; margin-bottom:12px; line-height:1.35; }
+  --border:#d0d0d0;
+  --soft:#f4f4f4;
 
-    label{ display:block; font-weight:950; margin-top:12px; margin-bottom:6px; }
+  --btn-bg:#eeeeee;
+  --btn-text:#111111;
+  --btn-hover:#1e9b4b; /* green */
 
-    input, select{
-      width:100%;
-      height:44px;
-      border:1px solid #d9d9d9;
-      border-radius:12px;
-      padding:0 10px;
-      font-size:14px;
-      font-weight:900;
-      box-sizing:border-box;
-      background:#fff;
-    }
+  --primary-bg:#111111;
+  --primary-text:#ffffff;
+  --primary-hover:#1e9b4b;
 
-    .row{ display:flex; gap:10px; }
-    .row > div{ flex:1; }
+  --danger:#b00020;
+}
 
-    .chipRow{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      margin-top:10px;
-      align-items:center;
-    }
+body{
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  margin:0;
+  padding:12px 12px 90px 12px;
+  color:var(--text);
+  background:var(--bg);
+}
 
-    .chipBtn{
-      border:1px solid #d9d9d9;
-      background:#fff;
-      border-radius:999px;
-      padding:10px 12px;
-      font-weight:950;
-      cursor:pointer;
-      user-select:none;
-      display:flex;
-      align-items:center;
-      gap:8px;
-    }
-    .chipBtn[data-on="true"]{
-      border-color:#111;
-      background:#111;
-      color:#fff;
-    }
+h3{ margin:0 0 6px 0; font-weight:950; }
+.muted{ color:var(--muted); font-weight:800; font-size:12px; margin-bottom:12px; }
 
-    .miniRow{
-      display:flex;
-      gap:10px;
-      margin-top:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
+label{ display:block; font-weight:950; margin-top:12px; margin-bottom:6px; }
 
-    .miniBtn{
-      height:40px;
-      border-radius:12px;
-      border:1px solid #d9d9d9;
-      background:#fff;
-      color:#111;
-      font-weight:950;
-      cursor:pointer;
-      padding:0 12px;
-    }
-    .miniBtn:active{ transform:translateY(1px); }
+input, select{
+  width:100%;
+  height:44px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:0 10px;
+  font-size:14px;
+  font-weight:900;
+  color:var(--text);
+  background:#fff;
+}
 
-    .jetsBox{
-      margin-top:10px;
-      border:1px solid #d9d9d9;
-      border-radius:12px;
-      background:#f6f6f6;
-      padding:10px;
-    }
+.row{ display:flex; gap:10px; }
+.row > div{ flex:1; }
 
-    .jetLine{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding:8px 0;
-      border-bottom:1px solid #e4e4e4;
-    }
-    .jetLine:last-child{ border-bottom:none; }
+.chipRow{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
 
-    .jetName{
-      font-weight:950;
-      white-space:nowrap;
-    }
+.chipBtn{
+  border:1px solid var(--border);
+  background:var(--btn-bg);
+  color:var(--btn-text);
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:950;
+  cursor:pointer;
+}
+.chipBtn:hover{
+  border-color:var(--btn-hover);
+  color:var(--btn-hover);
+}
+.chipBtn[data-on="true"]{
+  background:var(--btn-hover);
+  border-color:var(--btn-hover);
+  color:#ffffff;
+}
 
-    .jetTarget{
-      width:150px;
-      height:40px;
-      border-radius:12px;
-      border:1px solid #d9d9d9;
-      padding:0 10px;
-      font-weight:950;
-      text-align:center;
-      background:#fff;
-    }
+.miniBtn{
+  height:40px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--btn-bg);
+  color:var(--btn-text);
+  font-weight:950;
+  cursor:pointer;
+  padding:0 14px;
+}
+.miniBtn:hover{
+  border-color:var(--btn-hover);
+  color:var(--btn-hover);
+}
 
-    .stickyBar{
-      position:fixed;
-      left:0;
-      right:0;
-      bottom:0;
-      background:#fff;
-      border-top:1px solid #e6e6e6;
-      padding:10px 12px;
-      box-shadow: 0 -8px 20px rgba(0,0,0,0.05);
-    }
+.jetsBox{
+  margin-top:10px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--soft);
+  padding:10px;
+}
 
-    .saveBtn{
-      width:100%;
-      height:46px;
-      border-radius:12px;
-      border:1px solid #111;
-      background:#111;
-      color:#fff;
-      font-weight:950;
-      cursor:pointer;
-      font-size:14px;
-    }
-    .saveBtn:active{ transform: translateY(1px); }
+.jetLine{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:8px 0;
+  border-bottom:1px solid #e0e0e0;
+}
+.jetLine:last-child{ border-bottom:none; }
 
-    .warn{
-      margin-top:8px;
-      color:#b00020;
-      font-weight:900;
-      font-size:12px;
-      display:none;
-    }
+.jetName{
+  font-weight:950;
+  color:var(--text);
+}
+
+.jetTarget{
+  width:150px;
+  height:40px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  padding:0 10px;
+  font-weight:950;
+  text-align:center;
+  color:var(--text);
+  background:#fff;
+}
+
+.stickyBar{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  background:#ffffff;
+  border-top:1px solid var(--border);
+  padding:10px 12px;
+}
+
+.saveBtn{
+  width:100%;
+  height:46px;
+  border-radius:12px;
+  border:1px solid var(--primary-bg);
+  background:var(--primary-bg);
+  color:var(--primary-text);
+  font-weight:950;
+  cursor:pointer;
+  font-size:14px;
+}
+.saveBtn:hover{
+  background:var(--primary-hover);
+  border-color:var(--primary-hover);
+}
+
+.warn{
+  margin-top:8px;
+  color:var(--danger);
+  font-weight:900;
+  font-size:12px;
+}
   </style>
 
   <script src="https://p.trellocdn.com/power-up.min.js"></script>

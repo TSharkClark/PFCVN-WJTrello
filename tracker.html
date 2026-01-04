@@ -7,14 +7,22 @@
 
   <style>
     :root{
-      --text:#111;
-      --muted:#6b6b6b;
-      --border:#d9d9d9;
-      --soft:#f6f6f6;
-      --danger:#b00020;
-      --good:#0b6b1a;
-      --btn:#111;
-      --btnText:#fff;
+      --bg:#ffffff;
+  --text:#111111;
+  --muted:#555555;
+
+  --border:#d0d0d0;
+  --soft:#f4f4f4;
+
+  --btn-bg:#eeeeee;
+  --btn-text:#111111;
+  --btn-hover:#1e9b4b;
+
+  --primary-bg:#111111;
+  --primary-text:#ffffff;
+
+  --danger:#b00020;
+  --good:#1e9b4b;
     }
 
     body{
@@ -70,13 +78,17 @@
     }
 
     .btn{
-      border:1px solid var(--border);
-      background:#fff;
+       border:1px solid var(--border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
       border-radius:10px;
-      padding:8px 10px;
+      padding:8px 12px;
       font-weight:950;
       cursor:pointer;
-      user-select:none;
+}
+.btn:hover{
+  border-color:var(--btn-hover);
+  color:var(--btn-hover);
     }
     .btn:hover{ background:var(--soft); }
 
@@ -175,19 +187,22 @@
     }
 
     .pm{
-      width:46px;
-      height:46px;
-      border-radius:12px;
-      border:1px solid var(--border);
-      background:var(--btn);
-      color:var(--btnText);
-      font-weight:950;
-      font-size:22px;
-      cursor:pointer;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      user-select:none;
+      .pm{
+  width:46px;
+  height:46px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--btn-bg);
+  color:var(--btn-text);
+  font-weight:950;
+  font-size:22px;
+  cursor:pointer;
+}
+.pm:hover{
+  border-color:var(--btn-hover);
+  color:var(--btn-hover);
+}
+
     }
     .pm:active{ transform: translateY(1px); }
 
