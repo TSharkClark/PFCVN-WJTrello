@@ -4,88 +4,74 @@ const STORAGE_KEY = 'trackers';
 
 let renderToken = 0;
 
-function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
-function round3(v){ return Math.round(n(v) * 1000) / 1000; }
-function fmt(v){
-  const x = round3(v);
-  return ('' + x).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
-}
-
-function el(tag, attrs = {}, children = []){
-  const node = document.createElement(tag);
-  for (const [k,v] of Object.entries(attrs)){
-    if (k === 'class') node.className = v;
-    else if (k === 'text') node.textContent = v;
-    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
-    else node.setAttribute(k, v);
-  }
-  for (const c of children) node.appendChild(c);
-  return node;
-}
-
-async function loadTrackers(){ return await t.get('card','shared',STORAGE_KEY,{}); }
-async function saveTrackers(trackers){ await t.set('card','shared',STORAGE_KEY,trackers); }
-
-function upgradeTrackerSchema(tr){
-  if (!tr) return tr;
-
-  const breakdowns = Array.isArray(tr.breakdowns) ? tr.breakdowns.map(b => ({
-    id: b.id || ('bd_' + Math.random().toString(16).slice(2)),
-    name: b.name ?? '',
-    totalTarget: b.totalTarget ?? 0,
-    jets: b.jets || {}
-  })) : [];
-
-  return {
-    ...tr,
-    totalTarget: tr.totalTarget ?? 0,
-    autoSplit: tr.autoSplit ?? false,
-    collapsed: tr.collapsed ?? false,
-    jets: tr.jets || {},
-    breakdowns,
-    checklistItemName: tr.checklistItemName ?? null
-  };
-}
-
-async function loadUpgradedTrackers(){
-  const trackers = await loadTrackers();
-  let changed = false;
-  const out = { ...(trackers || {}) };
-  for (const [id,tr] of Object.entries(out)){
-    const up = upgradeTrackerSchema(tr);
-    if (JSON.stringify(up) !== JSON.stringify(tr)){
-      out[id] = up;
-      changed = true;
-    }
-  }
-  if (changed) await saveTrackers(out);
-  return out;
-}
-
-// REST-first checklist name (stable)
-async function getChecklistItemName(itemId){
-  if (!itemId) return null;
+function getCardId(){
   try{
-    const rest = t.getRestApi();
-    const ok = await rest.isAuthorized();
-    if (ok){
-      const card = await t.card('id');
-      const checklists = await rest.get(`/cards/${card.id}/checklists`, {
-        checkItems: 'all',
-        fields: 'name',
-        checkItem_fields: 'name'
-      });
-      for (const cl of (checklists || [])){
-        for (const it of (cl.checkItems || [])){
-          if (it.id === itemId) return it.name;
-        }
-      }
+    const ctx = t.getContext && t.getContext();
+    return (ctx && ctx.card) ? ctx.card : 'card';
+  }catch{ return 'card'; }
+}
+function lsKey(trackerId, suffix){
+  return `wjrt:${getCardId()}:${trackerId}:${suffix}`;
+}
+function getFocus(trackerId){
+  try{ return localStorage.getItem(lsKey(trackerId,'focus')) || 'ALL'; }catch{ return 'ALL'; }
+}
+function setFocus(trackerId, val){
+  try{ localStorage.setItem(lsKey(trackerId,'focus'), val); }catch{}
+}
+function isBreakdownCollapsed(trackerId, bdId){
+  try{ return localStorage.getItem(lsKey(trackerId,`bd:${bdId}:collapsed`)) === '1'; }catch{ return false; }
+}
+function toggleBreakdownCollapsed(trackerId, bdId){
+  try{
+    const k = lsKey(trackerId,`bd:${bdId}:collapsed`);
+    const cur = localStorage.getItem(k) === '1';
+    localStorage.setItem(k, cur ? '0' : '1');
+  }catch{}
+}
+function collapseAllBreakdowns(trackerId, collapse){
+  try{
+    const trackersEl = document.querySelectorAll(`[data-tracker-id="${trackerId}"][data-bd-id]`);
+    for (const elx of trackersEl){
+      const bdId = elx.getAttribute('data-bd-id');
+      const k = lsKey(trackerId,`bd:${bdId}:collapsed`);
+      localStorage.setItem(k, collapse ? '1' : '0');
     }
-  }catch{ /* ignore */ }
-  return null;
+  }catch{}
+}
+
+function n(v){ const x = parseFloat(v); return Number.isFinite(x) ? x : 0; }
+function fmt(v){
+  const x = n(v);
+  const s = (Math.round(x*1000)/1000).toString();
+  return s;
+}
+
+function el(tag, attrs={}, kids=[]){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)){
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k === 'onclick') e.addEventListener('click', v);
+    else e.setAttribute(k, v);
+  }
+  if (!Array.isArray(kids)) kids = [kids];
+  for (const kid of kids){
+    if (kid == null) continue;
+    if (typeof kid === 'string') e.appendChild(document.createTextNode(kid));
+    else e.appendChild(kid);
+  }
+  return e;
+}
+
+function uid(){
+  return 'tr_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36);
 }
 
 function pct(current, max){
+  current = n(current);
+  max = n(max);
   if (max <= 0) return 0;
   return Math.max(0, Math.min(1, current / max));
 }
@@ -112,6 +98,23 @@ function aggregateByJet(breakdowns){
   return out;
 }
 
+function statusFor(current, target){
+  current = n(current);
+  target = n(target);
+
+  if (target <= 0){
+    return { text:'NO TARGET', cls:'under', over:false };
+  }
+  const diff = current - target;
+  if (Math.abs(diff) < 0.0005){
+    return { text:'ON TARGET', cls:'good', over:false };
+  }
+  if (diff > 0){
+    return { text:`OVER +${fmt(diff)}`, cls:'over', over:true };
+  }
+  return { text:`UNDER ${fmt(Math.abs(diff))}`, cls:'under', over:false };
+}
+
 function computeTotals(tr){
   if (tr.breakdowns && tr.breakdowns.length){
     let totalCurrent = 0;
@@ -134,11 +137,22 @@ function computeTotals(tr){
   return { totalCurrent: s.current, totalTarget, breakdownTargetSum: 0 };
 }
 
-function statusFor(currentVal, targetVal){
-  const diff = n(currentVal) - n(targetVal);
-  if (diff > 0) return { text:`OVER +${fmt(diff)}`, cls:'statusOver', over:true };
-  if (diff < 0) return { text:`UNDER ${fmt(Math.abs(diff))}`, cls:'statusUnder', over:false };
-  return { text:'ON TARGET', cls:'', over:false };
+async function loadUpgradedTrackers(){
+  const all = (await t.get('card','shared',STORAGE_KEY)) || {};
+  return all;
+}
+
+async function saveTrackers(all){
+  await t.set('card','shared',STORAGE_KEY,all);
+}
+
+async function mutateTracker(id, fn){
+  const all = await loadUpgradedTrackers();
+  const cur = all[id];
+  if (!cur) return;
+  all[id] = fn(cur);
+  await saveTrackers(all);
+  await renderAll();
 }
 
 function openCreateModal(){
@@ -158,15 +172,33 @@ function openEditModal(id){
   });
 }
 
-async function mutateTracker(id, mutateFn){
-  const trackers = await loadUpgradedTrackers();
-  if (!trackers[id]) return;
-  trackers[id] = mutateFn(trackers[id]);
-  await saveTrackers(trackers);
-  await render();
+/* ---------- Checklist link: safe fetch name ---------- */
+async function getChecklistItemName(itemId){
+  if (!itemId) return null;
+  try{
+    const rest = t.getRestApi();
+    const ok = await rest.isAuthorized();
+    if (!ok) return null;
+
+    const ctx = t.getContext();
+    const cardId = ctx.card;
+    const checks = await rest.getToken().then(token => {
+      return fetch(`https://api.trello.com/1/cards/${cardId}/checklists?key=${rest._key}&token=${token}`)
+        .then(r => r.json());
+    });
+
+    for (const cl of (checks || [])){
+      for (const it of (cl.checkItems || [])){
+        if (it.id === itemId) return it.name || null;
+      }
+    }
+    return null;
+  }catch{
+    return null;
+  }
 }
 
-async function render(){
+async function renderAll(){
   const myToken = ++renderToken;
   const trackers = await loadUpgradedTrackers();
   if (myToken !== renderToken) return;
@@ -176,7 +208,7 @@ async function render(){
 
   const entries = Object.entries(trackers || {});
   if (!entries.length){
-    container.appendChild(el('div',{class:'empty',text:'No trackers yet. Click “+ Add Tracker” above.'}));
+    container.appendChild(el('div',{class:'empty',text:'No trackers yet. Click “+ Add Tracker”.'}));
     t.sizeTo(document.body);
     return;
   }
@@ -192,15 +224,11 @@ async function render(){
     const displayName = tracker.name || linkedName || 'Run Tracker';
     const totals = computeTotals(tracker);
 
-    const totalDiff = totals.totalCurrent - totals.totalTarget;
+    const card = el('div',{class:'card'});
 
-    const card = el('div',{class:'tracker'});
-
-    const headLeft = el('div',{},[
-      el('div',{class:'title',text:displayName}),
-      el('div',{class:'sub',text: tracker.checklistItemId
-        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked (authorize for stable checklist names)')
-        : 'Not linked'})
+    const left = el('div',{},[
+      el('div',{class:'name',text:displayName}),
+      el('div',{class:'sub',text: linkedName ? `Linked to: ${linkedName}` : 'Not linked'})
     ]);
 
     const actions = el('div',{class:'actions'},[
@@ -214,33 +242,43 @@ async function render(){
         type:'button',
         class:'btn',
         text:'Edit',
-        onclick: async () => { await openEditModal(id); await render(); }
+        onclick: async () => { await openEditModal(id); await renderAll(); }
       }),
       el('button',{
         type:'button',
-        class:'btn btnDanger',
+        class:'dangerBtn',
         text:'Delete',
         onclick: async () => {
-          const next = { ...(trackers || {}) };
-          delete next[id];
-          await saveTrackers(next);
-          await render();
+          if (!confirm('Delete this tracker?')) return;
+          const all = await loadUpgradedTrackers();
+          delete all[id];
+          await saveTrackers(all);
+          await renderAll();
         }
       })
     ]);
 
-    card.appendChild(el('div',{class:'head'},[headLeft, actions]));
+    card.appendChild(el('div',{class:'header'},[left, actions]));
 
-    const pill = totalDiff > 0
-      ? el('span',{class:'pill pillOver',text:`TOTAL OVER +${fmt(totalDiff)}`})
-      : el('span',{class:'pill pillUnder',text:`Remaining ${fmt(Math.abs(totalDiff))}`});
-
+    // Total section
     const totalBox = el('div',{class:'totalBox'});
+    const totalDiff = totals.totalCurrent - totals.totalTarget;
+    const stTotal = statusFor(totals.totalCurrent, totals.totalTarget);
+
+    const pill = el('div',{class:`pill ${stTotal.over?'over':'good'}`});
+    if (totals.totalTarget <= 0){
+      pill.textContent = 'No total target';
+    }else{
+      pill.textContent = (stTotal.over ? `Over +${fmt(totalDiff)}` : `Remaining ${fmt(Math.max(0, -totalDiff))}`);
+    }
+
     totalBox.appendChild(el('div',{class:'totalTop'},[
-      el('div',{text:'Total Run Count'}),
-      el('div',{text:`${fmt(totals.totalCurrent)} / ${fmt(totals.totalTarget)}`})
+      el('div',{style:'font-weight:950;',text:'Total Run Count'}),
+      el('div',{style:'display:flex;align-items:center;gap:8px;'},[
+        pill,
+        el('div',{style:'font-weight:950;color:var(--muted);white-space:nowrap;'},text:`${fmt(totals.totalCurrent)} / ${fmt(totals.totalTarget)}`)
+      ])
     ]));
-    totalBox.appendChild(pill);
 
     const totalBarWrap = el('div',{class:`barWrap ${totalDiff>0?'barOver':''}`});
     const totalBarFill = el('div',{class:'barFill'});
@@ -256,59 +294,72 @@ async function render(){
       continue;
     }
 
-    // ✅ BREAKDOWN MODE: show aggregate by jet, then breakdown blocks with controls
+    // View / focus controls (hide other jets for clarity)
+    const focusVal = getFocus(id);
+    const toolbar = el('div',{class:'toolbarRow'});
+    const chips = el('div',{class:'focusChips'});
+    const mkChip = (label, val) => el('button',{
+      type:'button',
+      class:`chipBtn ${focusVal===val?'active':''}`,
+      text:label,
+      onclick: () => { setFocus(id,val); renderAll(); }
+    });
+    chips.appendChild(mkChip('All','ALL'));
+    chips.appendChild(mkChip('WJ1','Waterjet 1'));
+    chips.appendChild(mkChip('WJ2','Waterjet 2'));
+    chips.appendChild(mkChip('WJ3','Waterjet 3'));
+    toolbar.appendChild(chips);
+
+    // quick collapse/expand breakdowns when present
     if (tracker.breakdowns && tracker.breakdowns.length){
-      const agg = aggregateByJet(tracker.breakdowns);
+      const mini = el('div',{class:'focusChips'});
+      mini.appendChild(el('button',{type:'button',class:'iconBtn',text:'Collapse all',onclick:()=>{ collapseAllBreakdowns(id,true); renderAll(); }}));
+      mini.appendChild(el('button',{type:'button',class:'iconBtn',text:'Expand all',onclick:()=>{ collapseAllBreakdowns(id,false); renderAll(); }}));
+      toolbar.appendChild(mini);
+    }else{
+      toolbar.appendChild(el('div',{class:'miniNote',text:'Tip: focus your machine to reduce clutter.'}));
+    }
+    card.appendChild(toolbar);
 
-      card.appendChild(el('div',{class:'sectionTitle',text:'Overall by Jet'}));
-
-      const jetsWrap = el('div',{class:'jets'});
-      for (const [jetName, jet] of Object.entries(agg)){
-        const st = statusFor(jet.current, jet.target);
-
-        const row = el('div',{class:'jetRow'});
-        row.appendChild(el('div',{class:'jetHeader'},[
-          el('div',{class:'jetName',text:jetName}),
-          el('div',{class:`status ${st.cls}`,text:st.text})
-        ]));
-
-        const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
-        const barFill = el('div',{class:'barFill'});
-        barFill.style.width = (pct(jet.current, jet.target)*100).toFixed(0)+'%';
-        barWrap.appendChild(barFill);
-        row.appendChild(barWrap);
-
-        row.appendChild(el('div',{class:'controls'},[
-          el('div',{class:'max',text:`${fmt(jet.current)} / ${fmt(jet.target)} target`})
-        ]));
-
-        jetsWrap.appendChild(row);
-      }
-      card.appendChild(jetsWrap);
-
+    // ✅ BREAKDOWN MODE: show breakdown blocks with controls (no "Overall by Jet" to reduce clutter)
+    if (tracker.breakdowns && tracker.breakdowns.length){
       card.appendChild(el('div',{class:'sectionTitle',text:'Run Breakdown'}));
 
       for (const bd of tracker.breakdowns){
         const bdJets = bd.jets || {};
         const s = sumJets(bdJets);
         const bdTarget = n(bd.totalTarget) || s.target;
-        const bdDiff = s.current - bdTarget;
 
         const bdBox = el('div',{class:'breakdown'});
+        const bdId = bd.id || bd.name || 'bd';
+        bdBox.setAttribute('data-tracker-id', id);
+        bdBox.setAttribute('data-bd-id', bdId);
+        const bdCollapsed = isBreakdownCollapsed(id, bdId);
 
         bdBox.appendChild(el('div',{class:'breakdownHeader'},[
           el('div',{class:'bdName',text: bd.name || 'Breakdown'}),
-          el('div',{class:'bdMeta',text:`${fmt(s.current)} / ${fmt(bdTarget)}`})
+          el('div',{style:'display:flex;align-items:center;gap:8px;'},[
+            el('div',{class:'bdMeta',text:`${fmt(s.current)} / ${fmt(bdTarget)}`}),
+            el('button',{type:'button',class:'iconBtn',text: bdCollapsed ? '▸' : '▾', onclick:()=>{ toggleBreakdownCollapsed(id, bdId); renderAll(); }})
+          ])
         ]));
 
-        const bdBarWrap = el('div',{class:`barWrap ${bdDiff>0?'barOver':''}`});
+        const bdBarWrap = el('div',{class:`barWrap ${s.current>bdTarget?'barOver':''}`});
         const bdBarFill = el('div',{class:'barFill'});
         bdBarFill.style.width = (pct(s.current, bdTarget)*100).toFixed(0)+'%';
         bdBarWrap.appendChild(bdBarFill);
         bdBox.appendChild(bdBarWrap);
 
+        if (bdCollapsed){
+          bdBox.appendChild(el('div',{class:'miniNote',text:'Collapsed'}));
+          card.appendChild(bdBox);
+          continue;
+        }
+
         const innerJets = el('div',{class:'jets'});
         for (const [jetName, data] of Object.entries(bdJets)){
+          if (focusVal !== 'ALL' && jetName !== focusVal) continue;
+
           const currentVal = n(data.current);
           const targetVal = n(data.target);
           const st = statusFor(currentVal, targetVal);
@@ -337,14 +388,22 @@ async function render(){
           const applyValue = async (newVal) => {
             const trackers2 = await loadUpgradedTrackers();
             const tr = trackers2[id];
-            const b = (tr.breakdowns || []).find(x => x.id === bd.id);
-            if (!b?.jets?.[jetName]) return;
-            b.jets[jetName].current = round3(newVal);
+            if (!tr) return;
+
+            const next = JSON.parse(JSON.stringify(tr));
+            const bdx = (next.breakdowns || []).find(x => (x.id || x.name) === bdId);
+            if (!bdx) return;
+
+            bdx.jets = bdx.jets || {};
+            bdx.jets[jetName] = bdx.jets[jetName] || { current: 0, target: 0 };
+            bdx.jets[jetName].current = n(newVal);
+
+            trackers2[id] = next;
             await saveTrackers(trackers2);
-            await render();
+            await renderAll();
           };
 
-          const minus = el('button',{type:'button',class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
+          const minus = el('button',{type:'button',class:'pm',text:'−',onclick:() => applyValue(currentVal - 1)});
           const plus  = el('button',{type:'button',class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
 
           input.addEventListener('change', e => applyValue(e.target.value));
@@ -355,6 +414,10 @@ async function render(){
           ]));
 
           innerJets.appendChild(row);
+        }
+
+        if (!innerJets.children.length){
+          innerJets.appendChild(el('div',{class:'miniNote',text:'No counters for this jet in this breakdown.'}));
         }
 
         bdBox.appendChild(innerJets);
@@ -368,6 +431,8 @@ async function render(){
     // Classic mode (no breakdowns)
     const jetsWrap2 = el('div',{class:'jets'});
     for (const [jetName, data] of Object.entries(tracker.jets || {})){
+      if (focusVal !== 'ALL' && jetName !== focusVal) continue;
+
       const currentVal = n(data.current);
       const targetVal = n(data.target);
       const st = statusFor(currentVal, targetVal);
@@ -395,13 +460,17 @@ async function render(){
       const applyValue = async (newVal) => {
         const trackers2 = await loadUpgradedTrackers();
         const tr = trackers2[id];
-        if (!tr?.jets?.[jetName]) return;
-        tr.jets[jetName].current = round3(newVal);
+        if (!tr) return;
+        const next = JSON.parse(JSON.stringify(tr));
+        next.jets = next.jets || {};
+        next.jets[jetName] = next.jets[jetName] || { current: 0, target: 0 };
+        next.jets[jetName].current = n(newVal);
+        trackers2[id] = next;
         await saveTrackers(trackers2);
-        await render();
+        await renderAll();
       };
 
-      const minus = el('button',{type:'button',class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
+      const minus = el('button',{type:'button',class:'pm',text:'−',onclick:() => applyValue(currentVal - 1)});
       const plus  = el('button',{type:'button',class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
 
       input.addEventListener('change', e => applyValue(e.target.value));
@@ -414,17 +483,20 @@ async function render(){
       jetsWrap2.appendChild(row);
     }
 
+    if (!jetsWrap2.children.length){
+      jetsWrap2.appendChild(el('div',{class:'miniNote',text:'No counters for this jet. Select All to view others.'}));
+    }
     card.appendChild(jetsWrap2);
+
     container.appendChild(card);
   }
 
   t.sizeTo(document.body);
 }
 
-t.render(async () => {
-  document.getElementById('addTrackerBtn').onclick = async () => { await openCreateModal(); await render(); };
-  await render();
+document.getElementById('addTrackerBtn').addEventListener('click', async () => {
+  await openCreateModal();
+  await renderAll();
 });
 
-window.addEventListener('focus', () => render());
-document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+renderAll();
