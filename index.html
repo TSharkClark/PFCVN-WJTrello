@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>WJ Power-Up Connector</title>
+    <title>Waterjet Run Tracker Connector</title>
   </head>
   <body>
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
@@ -20,10 +20,11 @@
             icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
             text: "Add Run Tracker",
             callback: function (t) {
-              return t.popup({
+              return t.modal({
                 title: "Create Run Tracker",
                 url: t.signUrl("./create.html"),
-                height: 640
+                fullscreen: true,
+                height: 760
               });
             }
           }];
@@ -36,7 +37,7 @@
             content: {
               type: "iframe",
               url: t.signUrl("./tracker.html"),
-              height: 560
+              height: 620
             }
           };
         }

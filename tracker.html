@@ -8,28 +8,60 @@
   <style>
     :root{
       --bg:#ffffff;
-  --text:#111111;
-  --muted:#555555;
+      --text:#111111;
+      --muted:#555555;
 
-  --border:#d0d0d0;
-  --soft:#f4f4f4;
+      --border:#d0d0d0;
+      --soft:#f4f4f4;
 
-  --btn-bg:#eeeeee;
-  --btn-text:#111111;
-  --btn-hover:#1e9b4b;
+      --btn-bg:#eeeeee;
+      --btn-text:#111111;
+      --btn-hover:#1e9b4b;
 
-  --primary-bg:#111111;
-  --primary-text:#ffffff;
+      --primary-bg:#111111;
+      --primary-text:#ffffff;
+      --primary-hover:#1e9b4b;
 
-  --danger:#b00020;
-  --good:#1e9b4b;
+      --danger:#b00020;
+      --good:#1e9b4b;
     }
 
     body{
       margin:0;
       padding:12px;
+      background:var(--bg);
       color:var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:12px;
+    }
+
+    .topTitle{
+      font-weight:950;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .primaryBtn{
+      border:1px solid var(--primary-bg);
+      background:var(--primary-bg);
+      color:var(--primary-text);
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:950;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .primaryBtn:hover{
+      border-color:var(--primary-hover);
+      background:var(--primary-hover);
     }
 
     .empty{
@@ -78,22 +110,27 @@
     }
 
     .btn{
-       border:1px solid var(--border);
+      border:1px solid var(--border);
       background:var(--btn-bg);
       color:var(--btn-text);
       border-radius:10px;
       padding:8px 12px;
       font-weight:950;
       cursor:pointer;
-}
-.btn:hover{
-  border-color:var(--btn-hover);
-  color:var(--btn-hover);
+      user-select:none;
     }
-    .btn:hover{ background:var(--soft); }
+    .btn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
 
     .btnDanger{
-      border-color:#ffd0d6;
+      border-color:#ffb3be;
+      background:#fff;
+      color:var(--danger);
+    }
+    .btnDanger:hover{
+      border-color:var(--danger);
       color:var(--danger);
     }
 
@@ -119,6 +156,8 @@
       font-weight:950;
       border:1px solid var(--border);
       background:#fff;
+      display:inline-block;
+      margin-top:8px;
     }
     .pillOver{ border-color:#ffb3be; color:var(--danger); }
     .pillUnder{ border-color:#bfe9c6; color:var(--good); }
@@ -184,29 +223,29 @@
       align-items:center;
       gap:10px;
       justify-content:space-between;
+      margin-top:8px;
     }
 
     .pm{
-      .pm{
-  width:46px;
-  height:46px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  background:var(--btn-bg);
-  color:var(--btn-text);
-  font-weight:950;
-  font-size:22px;
-  cursor:pointer;
-}
-.pm:hover{
-  border-color:var(--btn-hover);
-  color:var(--btn-hover);
-}
-
+      width:46px;
+      height:46px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
+      font-weight:950;
+      font-size:22px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
     }
-    .pm:active{ transform: translateY(1px); }
+    .pm:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
 
-    /* Hide native number spinners */
     input[type=number]::-webkit-outer-spin-button,
     input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
@@ -221,6 +260,8 @@
       font-weight:950;
       text-align:center;
       min-width:120px;
+      color:var(--text);
+      background:#fff;
     }
 
     .max{
@@ -236,7 +277,7 @@
       padding:10px;
       border-radius:12px;
       border:1px dashed var(--border);
-      background: #fff;
+      background:#fff;
       color: var(--muted);
       font-weight:900;
       font-size:12px;
@@ -245,6 +286,11 @@
 </head>
 
 <body>
+  <div class="topbar">
+    <div class="topTitle">Track runs per jet + total (decimals OK)</div>
+    <button class="primaryBtn" id="addTrackerBtn">+ Add Tracker</button>
+  </div>
+
   <div id="container"></div>
 
   <script src="https://p.trellocdn.com/power-up.min.js"></script>

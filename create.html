@@ -6,208 +6,281 @@
   <title>Run Tracker</title>
 
   <style>
-   :root{
-  --bg:#ffffff;
-  --text:#111111;
-  --muted:#555555;
+    :root{
+      --bg:#ffffff;
+      --text:#111111;
+      --muted:#555555;
 
-  --border:#d0d0d0;
-  --soft:#f4f4f4;
+      --border:#d0d0d0;
+      --soft:#f4f4f4;
 
-  --btn-bg:#eeeeee;
-  --btn-text:#111111;
-  --btn-hover:#1e9b4b; /* green */
+      --btn-bg:#eeeeee;
+      --btn-text:#111111;
+      --btn-hover:#1e9b4b;
 
-  --primary-bg:#111111;
-  --primary-text:#ffffff;
-  --primary-hover:#1e9b4b;
+      --primary-bg:#111111;
+      --primary-text:#ffffff;
+      --primary-hover:#1e9b4b;
 
-  --danger:#b00020;
-}
+      --danger:#b00020;
+    }
 
-body{
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  margin:0;
-  padding:12px 12px 90px 12px;
-  color:var(--text);
-  background:var(--bg);
-}
+    body{
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin:0;
+      color:var(--text);
+      background:var(--bg);
+    }
 
-h3{ margin:0 0 6px 0; font-weight:950; }
-.muted{ color:var(--muted); font-weight:800; font-size:12px; margin-bottom:12px; }
+    .wrap{
+      padding:16px 16px 96px 16px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
 
-label{ display:block; font-weight:950; margin-top:12px; margin-bottom:6px; }
+    h2{
+      margin:0 0 6px 0;
+      font-weight:950;
+      letter-spacing:-0.2px;
+    }
+    .muted{
+      color:var(--muted);
+      font-weight:800;
+      font-size:13px;
+      margin-bottom:14px;
+      line-height:1.35;
+    }
 
-input, select{
-  width:100%;
-  height:44px;
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:0 10px;
-  font-size:14px;
-  font-weight:900;
-  color:var(--text);
-  background:#fff;
-}
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:14px;
+    }
+    @media (max-width: 860px){
+      .grid{ grid-template-columns: 1fr; }
+    }
 
-.row{ display:flex; gap:10px; }
-.row > div{ flex:1; }
+    .card{
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      background:#fff;
+    }
 
-.chipRow{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
+    label{
+      display:block;
+      font-weight:950;
+      margin-top:12px;
+      margin-bottom:6px;
+    }
 
-.chipBtn{
-  border:1px solid var(--border);
-  background:var(--btn-bg);
-  color:var(--btn-text);
-  border-radius:999px;
-  padding:10px 14px;
-  font-weight:950;
-  cursor:pointer;
-}
-.chipBtn:hover{
-  border-color:var(--btn-hover);
-  color:var(--btn-hover);
-}
-.chipBtn[data-on="true"]{
-  background:var(--btn-hover);
-  border-color:var(--btn-hover);
-  color:#ffffff;
-}
+    input, select{
+      width:100%;
+      height:46px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:0 12px;
+      font-size:14px;
+      font-weight:900;
+      color:var(--text);
+      background:#fff;
+      box-sizing:border-box;
+    }
 
-.miniBtn{
-  height:40px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  background:var(--btn-bg);
-  color:var(--btn-text);
-  font-weight:950;
-  cursor:pointer;
-  padding:0 14px;
-}
-.miniBtn:hover{
-  border-color:var(--btn-hover);
-  color:var(--btn-hover);
-}
+    .row{
+      display:flex;
+      gap:12px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+    }
+    .row > div{ flex:1; min-width: 220px; }
 
-.jetsBox{
-  margin-top:10px;
-  border:1px solid var(--border);
-  border-radius:12px;
-  background:var(--soft);
-  padding:10px;
-}
+    .chips{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
 
-.jetLine{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:8px 0;
-  border-bottom:1px solid #e0e0e0;
-}
-.jetLine:last-child{ border-bottom:none; }
+    .chipBtn{
+      border:1px solid var(--border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
+      border-radius:999px;
+      padding:12px 14px;
+      font-weight:950;
+      cursor:pointer;
+      user-select:none;
+    }
+    .chipBtn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
+    .chipBtn[data-on="true"]{
+      background:var(--btn-hover);
+      border-color:var(--btn-hover);
+      color:#fff;
+    }
 
-.jetName{
-  font-weight:950;
-  color:var(--text);
-}
+    .jetsBox{
+      margin-top:12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:var(--soft);
+      padding:12px;
+    }
 
-.jetTarget{
-  width:150px;
-  height:40px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  padding:0 10px;
-  font-weight:950;
-  text-align:center;
-  color:var(--text);
-  background:#fff;
-}
+    .jetLine{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:10px 0;
+      border-bottom:1px solid #e0e0e0;
+    }
+    .jetLine:last-child{ border-bottom:none; }
 
-.stickyBar{
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:0;
-  background:#ffffff;
-  border-top:1px solid var(--border);
-  padding:10px 12px;
-}
+    .jetName{
+      font-weight:950;
+      min-width: 120px;
+    }
 
-.saveBtn{
-  width:100%;
-  height:46px;
-  border-radius:12px;
-  border:1px solid var(--primary-bg);
-  background:var(--primary-bg);
-  color:var(--primary-text);
-  font-weight:950;
-  cursor:pointer;
-  font-size:14px;
-}
-.saveBtn:hover{
-  background:var(--primary-hover);
-  border-color:var(--primary-hover);
-}
+    .jetTarget{
+      width: 220px;
+      height: 44px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      padding:0 12px;
+      font-weight:950;
+      text-align:center;
+      background:#fff;
+    }
 
-.warn{
-  margin-top:8px;
-  color:var(--danger);
-  font-weight:900;
-  font-size:12px;
-}
+    .btn{
+      height:44px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
+      font-weight:950;
+      cursor:pointer;
+      padding:0 14px;
+      user-select:none;
+    }
+    .btn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
+
+    .stickyBar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      background:#fff;
+      border-top:1px solid var(--border);
+      padding:12px 16px;
+      box-shadow: 0 -8px 20px rgba(0,0,0,0.06);
+    }
+
+    .stickyInner{
+      max-width: 980px;
+      margin:0 auto;
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      align-items:center;
+    }
+
+    .saveBtn{
+      min-width: 240px;
+      height:48px;
+      border-radius:14px;
+      border:1px solid var(--primary-bg);
+      background:var(--primary-bg);
+      color:var(--primary-text);
+      font-weight:950;
+      cursor:pointer;
+      font-size:15px;
+    }
+    .saveBtn:hover{
+      background:var(--primary-hover);
+      border-color:var(--primary-hover);
+    }
+
+    .warn{
+      margin-top:10px;
+      color:var(--danger);
+      font-weight:900;
+      font-size:13px;
+      display:none;
+    }
+
+    .tiny{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+      margin-top:8px;
+      line-height:1.35;
+    }
   </style>
 
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
 
 <body>
-  <h3 id="title">Create Run Tracker</h3>
-  <div class="muted" id="subtitle">
-    Pick your jets, set a total target (decimals allowed), optionally link to a checklist item.
-  </div>
+  <div class="wrap">
+    <h2 id="title">Create Run Tracker</h2>
+    <div class="muted" id="subtitle">Pick jets, set total target, optionally link a checklist item. Decimals allowed.</div>
 
-  <label>Tracker name (optional)</label>
-  <input id="name" placeholder="Example: Phase A, Solo Jet 1, etc." />
+    <div class="grid">
+      <div class="card">
+        <label>Tracker name (optional)</label>
+        <input id="name" placeholder="Example: Phase A, Solo Jet 1, etc." />
 
-  <label>Link to checklist item (optional)</label>
-  <select id="checklist">
-    <option value="">— Not linked —</option>
-  </select>
+        <label>Link to checklist item (optional)</label>
+        <select id="checklist">
+          <option value="">— Not linked —</option>
+        </select>
 
-  <div class="row">
-    <div>
-      <label>Total target</label>
-      <input id="totalTarget" type="number" step="any" value="38.8" />
+        <div class="row">
+          <div>
+            <label>Total target</label>
+            <input id="totalTarget" type="number" step="any" value="38.8" />
+          </div>
+          <div>
+            <label>Auto-split targets</label>
+            <select id="autoSplit">
+              <option value="on" selected>On (split from Total)</option>
+              <option value="off">Off (manual per-jet)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="btn" id="applyAuto" type="button">Apply Auto-Split</button>
+        </div>
+
+        <div class="warn" id="warn"></div>
+        <div class="tiny">
+          Tip: With Auto-split ON, changing Total or jets will re-split if you click Apply. You can still override per-jet targets.
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Jets to include</label>
+        <div class="chips" id="jetToggles"></div>
+
+        <label style="margin-top:14px;">Per-jet targets</label>
+        <div class="jetsBox" id="jetsBox"></div>
+      </div>
     </div>
-    <div>
-      <label>Auto-split</label>
-      <select id="autoSplit">
-        <option value="on" selected>On (split from Total)</option>
-        <option value="off">Off (manual targets)</option>
-      </select>
-    </div>
   </div>
-
-  <label>Jets to include</label>
-  <div class="chipRow" id="jetToggles"></div>
-
-  <div class="miniRow">
-    <button class="miniBtn" id="applyAuto">Apply Auto-Split</button>
-    <button class="miniBtn" id="fillDefaults">Fill Manual Targets</button>
-  </div>
-
-  <label>Per-jet targets</label>
-  <div class="jetsBox" id="jetsBox"></div>
-
-  <div class="warn" id="warn"></div>
 
   <div class="stickyBar">
-    <button class="saveBtn" id="saveBtn">Create tracker</button>
+    <div class="stickyInner">
+      <button class="saveBtn" id="saveBtn" type="button">Create tracker</button>
+    </div>
   </div>
 
   <script src="./create.js"></script>

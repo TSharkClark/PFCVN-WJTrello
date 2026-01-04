@@ -6,7 +6,6 @@ let renderToken = 0;
 
 function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
 function round3(v){ return Math.round(n(v) * 1000) / 1000; }
-
 function fmt(v){
   const x = round3(v);
   return ('' + x).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
@@ -17,6 +16,7 @@ function el(tag, attrs = {}, children = []){
   for (const [k,v] of Object.entries(attrs)){
     if (k === 'class') node.className = v;
     else if (k === 'text') node.textContent = v;
+    else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v);
   }
@@ -31,10 +31,43 @@ async function saveTrackers(trackers){
   await t.set('card','shared',STORAGE_KEY,trackers);
 }
 
-/**
- * More robust checklist hydration:
- * try t.card('checklists'), then t.card('all'), and safely walk common shapes.
- */
+function upgradeTrackerSchema(tr){
+  if (!tr) return tr;
+
+  // old schema: totalMax + jets[jet].max
+  const jets = { ...(tr.jets || {}) };
+  for (const [k,v] of Object.entries(jets)){
+    if (!v || typeof v !== 'object') continue;
+    if (v.target == null && v.max != null) v.target = v.max;
+    if (v.current == null) v.current = 0;
+    delete v.max;
+  }
+
+  return {
+    ...tr,
+    totalTarget: tr.totalTarget ?? tr.totalMax ?? 0,
+    autoSplit: tr.autoSplit ?? false,
+    collapsed: tr.collapsed ?? false,
+    jets
+  };
+}
+
+async function loadUpgradedTrackers(){
+  const trackers = await loadTrackers();
+  let changed = false;
+
+  const out = { ...(trackers || {}) };
+  for (const [id,tr] of Object.entries(out)){
+    const up = upgradeTrackerSchema(tr);
+    if (JSON.stringify(up) !== JSON.stringify(tr)) {
+      out[id] = up;
+      changed = true;
+    }
+  }
+  if (changed) await saveTrackers(out);
+  return out;
+}
+
 async function getChecklistItemName(itemId){
   if (!itemId) return null;
 
@@ -43,9 +76,9 @@ async function getChecklistItemName(itemId){
   try { candidates.push(await t.card('all')); } catch {}
 
   for (const card of candidates){
-    const lists = card?.checklists || card?.checkList || [];
+    const lists = card?.checklists || [];
     for (const cl of lists){
-      const items = cl?.checkItems || cl?.checkItemStates || cl?.items || [];
+      const items = cl?.checkItems || cl?.items || cl?.checkItemStates || [];
       for (const it of items){
         const id = it?.id || it?.idCheckItem;
         const name = it?.name;
@@ -71,34 +104,52 @@ function computeTotals(tracker){
     sumJetTargets += n(jet.target);
   }
 
-  // If totalTarget is not set, fall back to sum of per-jet targets
+  // fallback: if total target not set, use sum of jet targets
   if (!totalTarget) totalTarget = sumJetTargets;
 
-  return { totalCurrent, totalTarget, sumJetTargets };
+  return { totalCurrent, totalTarget };
+}
+
+function openCreateModal(){
+  return t.modal({
+    title: 'Create Run Tracker',
+    url: t.signUrl('./create.html'),
+    fullscreen: true,
+    height: 760
+  });
+}
+
+function openEditModal(id){
+  return t.modal({
+    title: 'Edit Run Tracker',
+    url: t.signUrl(`./create.html?mode=edit&id=${encodeURIComponent(id)}`),
+    fullscreen: true,
+    height: 760
+  });
 }
 
 async function mutateTracker(id, mutateFn){
-  const trackers = await loadTrackers();
+  const trackers = await loadUpgradedTrackers();
   if (!trackers[id]) return;
 
   const next = { ...(trackers || {}) };
-  const updated = mutateFn(next[id]);
-  next[id] = updated;
+  next[id] = mutateFn(next[id]);
   await saveTrackers(next);
   await render();
 }
 
 async function render(){
   const myToken = ++renderToken;
-  const trackers = await loadTrackers();
+  const trackers = await loadUpgradedTrackers();
   if (myToken !== renderToken) return;
 
   const container = document.getElementById('container');
   container.innerHTML = '';
 
   const entries = Object.entries(trackers || {});
+
   if (entries.length === 0){
-    container.appendChild(el('div',{class:'empty',text:'No trackers yet. Use “Add Run Tracker” on this card.'}));
+    container.appendChild(el('div',{class:'empty',text:'No trackers yet. Click “+ Add Tracker” above.'}));
     t.sizeTo(document.body);
     return;
   }
@@ -115,12 +166,13 @@ async function render(){
     const headLeft = el('div',{},[
       el('div',{class:'title',text:displayName}),
       el('div',{class:'sub',text: tracker.checklistItemId
-        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked checklist item not found / not accessible')
+        ? (linkedName ? `Linked to: ${linkedName}` : 'Linked checklist item not found / not hydrated')
         : 'Not linked'})
     ]);
 
     const actions = el('div',{class:'actions'},[
       el('button',{
+        type:'button',
         class:'btn',
         text: tracker.collapsed ? 'Expand' : 'Collapse',
         onclick: async () => {
@@ -128,15 +180,17 @@ async function render(){
         }
       }),
       el('button',{
+        type:'button',
         class:'btn',
         text:'Edit',
-        onclick: () => t.popup({
-          title:'Edit Run Tracker',
-          url: t.signUrl(`./create.html?mode=edit&id=${encodeURIComponent(id)}`),
-          height: 640
-        })
+        onclick: async () => {
+          await openEditModal(id);
+          // when modal closes, re-render so changes show immediately
+          await render();
+        }
       }),
       el('button',{
+        type:'button',
         class:'btn btnDanger',
         text:'Delete',
         onclick: async () => {
@@ -150,7 +204,7 @@ async function render(){
 
     card.appendChild(el('div',{class:'head'},[headLeft, actions]));
 
-    // TOTAL box
+    // TOTAL
     const pill = totalDiff > 0
       ? el('span',{class:'pill pillOver',text:`TOTAL OVER +${fmt(totalDiff)}`})
       : el('span',{class:'pill pillUnder',text:`Remaining ${fmt(Math.abs(totalDiff))}`});
@@ -160,7 +214,7 @@ async function render(){
       el('div',{text:'Total Run Count'}),
       el('div',{text:`${fmt(totalCurrent)} / ${fmt(totalTarget)}`})
     ]));
-    totalBox.appendChild(el('div',{},[pill]));
+    totalBox.appendChild(pill);
 
     const totalBarWrap = el('div',{class:`barWrap ${totalDiff>0?'barOver':''}`});
     const totalBarFill = el('div',{class:'barFill'});
@@ -171,7 +225,7 @@ async function render(){
     card.appendChild(totalBox);
 
     if (tracker.collapsed){
-      card.appendChild(el('div',{class:'collapsedNote',text:'Tracker collapsed. Expand to see per-jet controls.'}));
+      card.appendChild(el('div',{class:'collapsedNote',text:'Collapsed. Expand to see per-jet controls.'}));
       container.appendChild(card);
       continue;
     }
@@ -211,17 +265,16 @@ async function render(){
       });
 
       const applyValue = async (newVal) => {
-        const trackers2 = await loadTrackers();
+        const trackers2 = await loadUpgradedTrackers();
         const tr = trackers2[id];
         if (!tr?.jets?.[jetName]) return;
-
         tr.jets[jetName].current = round3(newVal);
         await saveTrackers(trackers2);
         await render();
       };
 
-      const minus = el('button',{class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
-      const plus  = el('button',{class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
+      const minus = el('button',{type:'button',class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
+      const plus  = el('button',{type:'button',class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
 
       input.addEventListener('change', e => applyValue(e.target.value));
 
@@ -242,7 +295,17 @@ async function render(){
   t.sizeTo(document.body);
 }
 
-t.render(() => render());
+t.render(async () => {
+  const addBtn = document.getElementById('addTrackerBtn');
+  if (addBtn) {
+    addBtn.onclick = async () => {
+      await openCreateModal();
+      await render();
+    };
+  }
+  await render();
+});
+
 window.addEventListener('focus', () => render());
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) render();

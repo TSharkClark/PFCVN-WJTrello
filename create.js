@@ -12,11 +12,8 @@ function uid(){
 }
 
 function qs(name){
-  try{
-    return new URL(window.location.href).searchParams.get(name);
-  }catch{
-    return null;
-  }
+  try{ return new URL(window.location.href).searchParams.get(name); }
+  catch{ return null; }
 }
 
 async function loadAll(){
@@ -24,6 +21,26 @@ async function loadAll(){
 }
 async function saveAll(all){
   await t.set('card','shared',STORAGE_KEY,all);
+}
+
+function upgradeTrackerSchema(tr){
+  if (!tr) return tr;
+
+  const jets = { ...(tr.jets || {}) };
+  for (const [k,v] of Object.entries(jets)){
+    if (!v || typeof v !== 'object') continue;
+    if (v.target == null && v.max != null) v.target = v.max;
+    if (v.current == null) v.current = 0;
+    delete v.max;
+  }
+
+  return {
+    ...tr,
+    totalTarget: tr.totalTarget ?? tr.totalMax ?? 0,
+    autoSplit: tr.autoSplit ?? false,
+    collapsed: tr.collapsed ?? false,
+    jets
+  };
 }
 
 function setWarn(msg){
@@ -37,12 +54,6 @@ function setWarn(msg){
   w.textContent = msg;
 }
 
-/**
- * Robust checklist load:
- * - Try t.card('checklists') first (best)
- * - Then try t.card('all') (fallback)
- * NOTE: Trello sometimes doesn't hydrate checkItems, so we tolerate empty.
- */
 async function fetchChecklistItemsFlat(){
   const results = [];
   const seen = new Set();
@@ -61,16 +72,14 @@ async function fetchChecklistItemsFlat(){
         const name = it?.name;
         if (!id || !name) continue;
 
-        const key = `${id}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        if (seen.has(id)) continue;
+        seen.add(id);
 
         results.push({ id, name, checklistName: clName });
       }
     }
   }
 
-  // Sort: checklist name then item name
   results.sort((a,b) => {
     const c = a.checklistName.localeCompare(b.checklistName);
     if (c !== 0) return c;
@@ -78,27 +87,6 @@ async function fetchChecklistItemsFlat(){
   });
 
   return results;
-}
-
-function upgradeTrackerSchema(tr){
-  if (!tr) return tr;
-
-  const jets = { ...(tr.jets || {}) };
-  for (const [k,v] of Object.entries(jets)){
-    if (v && typeof v === 'object'){
-      if (v.target == null && v.max != null) v.target = v.max;
-      if (v.current == null) v.current = 0;
-      delete v.max;
-    }
-  }
-
-  return {
-    ...tr,
-    totalTarget: tr.totalTarget ?? tr.totalMax ?? 0,
-    autoSplit: tr.autoSplit ?? false,
-    collapsed: tr.collapsed ?? false,
-    jets
-  };
 }
 
 function buildJetToggles(selected){
@@ -115,8 +103,7 @@ function buildJetToggles(selected){
 
     btn.addEventListener('click', () => {
       btn.dataset.on = (btn.dataset.on === 'true') ? 'false' : 'true';
-      renderJetTargets();          // rebuild target inputs
-      if (isAutoSplitOn()) applyAutoSplit();
+      renderJetTargets(); // rebuild target inputs
     });
 
     wrap.appendChild(btn);
@@ -141,7 +128,7 @@ function renderJetTargets(existingJets = null){
   if (!jets.length){
     const div = document.createElement('div');
     div.style.fontWeight = '900';
-    div.style.color = '#666';
+    div.style.color = '#555';
     div.textContent = 'Select at least one jet above.';
     box.appendChild(div);
     return;
@@ -162,13 +149,8 @@ function renderJetTargets(existingJets = null){
     input.inputMode = 'decimal';
     input.dataset.jet = jet;
 
-    // populate from existing if editing
-    if (existingJets?.[jet]?.target != null) {
-      input.value = existingJets[jet].target;
-    }
+    if (existingJets?.[jet]?.target != null) input.value = existingJets[jet].target;
 
-    // if auto-split is on, inputs are still editable (override allowed),
-    // but we won't forcibly re-split unless user hits Apply or changes total/jets.
     line.appendChild(left);
     line.appendChild(input);
     box.appendChild(line);
@@ -181,7 +163,6 @@ function applyAutoSplit(){
     setWarn('Select at least one jet first.');
     return;
   }
-  setWarn('');
 
   const total = round3(document.getElementById('totalTarget').value);
   if (!Number.isFinite(total) || total <= 0){
@@ -189,27 +170,11 @@ function applyAutoSplit(){
     return;
   }
 
+  setWarn('');
   const perJet = round3(total / jets.length);
 
   for (const inp of document.querySelectorAll('.jetTarget')){
     inp.value = perJet;
-  }
-}
-
-function fillManualTargets(){
-  const jets = selectedJets();
-  if (!jets.length){
-    setWarn('Select at least one jet first.');
-    return;
-  }
-  setWarn('');
-
-  // reasonable default: total / jets (if total exists) else 0
-  const total = round3(document.getElementById('totalTarget').value);
-  const perJet = (Number.isFinite(total) && total > 0) ? round3(total / jets.length) : 0;
-
-  for (const inp of document.querySelectorAll('.jetTarget')){
-    if (String(inp.value).trim() === '') inp.value = perJet;
   }
 }
 
@@ -239,13 +204,12 @@ async function boot(){
   const all = await loadAll();
   let editing = null;
 
-  // checklist dropdown (no search)
+  // checklist dropdown
   const checklistSelect = document.getElementById('checklist');
   checklistSelect.innerHTML = '<option value="">— Not linked —</option>';
 
   const items = await fetchChecklistItemsFlat();
   if (items.length){
-    // create optgroups by checklistName
     let currentGroup = null;
     let currentName = null;
 
@@ -261,62 +225,40 @@ async function boot(){
       opt.textContent = it.name;
       currentGroup.appendChild(opt);
     }
-  } else {
-    // still usable (optional link)
-    // but warn gently so you know why it's empty
-    // (Trello sometimes doesn't hydrate checkItems in Power-Ups)
-    setWarn('Checklist items didn’t load in this popup. Tracker can still be created. If this persists, we can add an authenticated Trello API fallback.');
   }
 
-  // EDIT MODE?
+  // edit mode
   if (mode === 'edit' && editId && all[editId]){
     editing = upgradeTrackerSchema(all[editId]);
 
     title.textContent = 'Edit Run Tracker';
-    subtitle.textContent = 'Rename / relink / total & per-jet targets / jets.';
+    subtitle.textContent = 'Rename, relink checklist item, adjust total + per-jet targets.';
     saveBtn.textContent = 'Save changes';
 
     document.getElementById('name').value = editing.name || '';
     document.getElementById('totalTarget').value = editing.totalTarget ?? 0;
     document.getElementById('autoSplit').value = editing.autoSplit ? 'on' : 'off';
 
-    // selected jets from existing
     const existingJets = editing.jets || {};
     const selected = Object.keys(existingJets).length ? Object.keys(existingJets) : [...JETS];
 
     buildJetToggles(selected);
     renderJetTargets(existingJets);
 
-    if (editing.checklistItemId){
-      checklistSelect.value = editing.checklistItemId;
-    }
+    if (editing.checklistItemId) checklistSelect.value = editing.checklistItemId;
   } else {
-    // CREATE MODE defaults
-    title.textContent = 'Create Run Tracker';
-    subtitle.textContent = 'Pick jets, set total target, optionally link a checklist item.';
-    saveBtn.textContent = 'Create tracker';
-
+    // create mode defaults
     buildJetToggles([...JETS]);
     renderJetTargets(null);
-
     if (isAutoSplitOn()) applyAutoSplit();
   }
 
-  // button handlers
-  document.getElementById('applyAuto').addEventListener('click', () => {
-    applyAutoSplit();
-  });
-
-  document.getElementById('fillDefaults').addEventListener('click', () => {
-    fillManualTargets();
-  });
-
-  document.getElementById('autoSplit').addEventListener('change', () => {
-    if (isAutoSplitOn()) applyAutoSplit();
-  });
+  // handlers
+  document.getElementById('applyAuto').addEventListener('click', () => applyAutoSplit());
 
   document.getElementById('totalTarget').addEventListener('change', () => {
-    if (isAutoSplitOn()) applyAutoSplit();
+    // keep it simple: do not force overwrite without clicking Apply
+    // (prevents accidental overrides)
   });
 
   saveBtn.addEventListener('click', async () => {
@@ -324,7 +266,6 @@ async function boot(){
     const name = nameRaw ? nameRaw : null;
 
     const checklistItemId = checklistSelect.value || null;
-
     const totalTarget = round3(document.getElementById('totalTarget').value);
     const autoSplit = isAutoSplitOn();
 
@@ -336,7 +277,7 @@ async function boot(){
 
     const jets = readJetsFromUI(editing?.jets || null);
 
-    // basic validation: targets should be numbers (can be 0, but warn)
+    // minimal validation
     for (const [jet, data] of Object.entries(jets)){
       if (!Number.isFinite(n(data.target))){
         setWarn(`Target for ${jet} is invalid.`);
@@ -357,16 +298,16 @@ async function boot(){
     if (editing){
       all[editId] = trackerPayload;
       await saveAll(all);
-      return t.closePopup();
+      return t.closeModal();
     }
 
     const id = uid();
     all[id] = trackerPayload;
     await saveAll(all);
-    return t.closePopup();
+    return t.closeModal();
   });
 
   t.sizeTo(document.body);
 }
 
-t.render(() => { boot(); });
+t.render(() => boot());
