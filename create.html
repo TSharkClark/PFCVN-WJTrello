@@ -25,16 +25,19 @@
       --danger:#b00020;
     }
 
-    body{
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    /* ✅ scrolling works in Trello modal iframe */
+    html, body{
+      height:100%;
+      overflow:auto;
       margin:0;
       color:var(--text);
       background:var(--bg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
     .wrap{
-      padding:14px 14px 92px 14px;
-      max-width: 980px;
+      padding:14px;
+      max-width: 1040px;
       margin: 0 auto;
     }
 
@@ -155,16 +158,20 @@
       display:none;
     }
 
+    /* ✅ Sticky footer that doesn't kill scrolling */
     .stickyBar{
-      position:fixed;
-      left:0; right:0; bottom:0;
+      position: sticky;
+      bottom: 0;
+      left: 0;
+      right: 0;
       background:#fff;
       border-top:1px solid var(--border);
       padding:10px 14px;
       box-shadow: 0 -8px 20px rgba(0,0,0,0.06);
+      margin-top: 12px;
     }
     .stickyInner{
-      max-width: 980px;
+      max-width: 1040px;
       margin:0 auto;
       display:flex;
       gap:10px;
@@ -232,14 +239,6 @@
       margin-top:10px;
     }
 
-    .bdTop{
-      display:flex;
-      gap:10px;
-      align-items:flex-end;
-      flex-wrap:wrap;
-    }
-    .bdTop > div{ flex:1; min-width: 220px; }
-
     .bdHeaderRow{
       display:flex;
       align-items:center;
@@ -253,6 +252,22 @@
       color:var(--muted);
       font-size:13px;
     }
+
+    .bdTop{
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      margin-bottom: 8px;
+    }
+    .bdTop > div{ flex:1; min-width: 220px; }
+
+    .bdJetsTitle{
+      margin-top:8px;
+      font-weight:950;
+      color:var(--muted);
+      font-size:12px;
+    }
   </style>
 
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
@@ -261,7 +276,7 @@
 <body>
   <div class="wrap">
     <h2 id="title">Create Run Tracker</h2>
-    <div class="muted" id="subtitle">Pick jets, set targets, optionally link a checklist item. Use “Run Breakdown” for file/variant splits.</div>
+    <div class="muted" id="subtitle">Targets, jets, optional link, and Run Breakdown.</div>
 
     <div class="grid">
       <div class="card">
@@ -312,7 +327,7 @@
       </div>
 
       <div class="card">
-        <label>Jets to include</label>
+        <label>Default jets (used for “no breakdown” mode + new breakdowns)</label>
         <div class="chips" id="jetToggles"></div>
 
         <div id="simpleTargetsWrap">
@@ -321,16 +336,16 @@
         </div>
 
         <div id="breakdownsWrap" style="display:none;">
-          <div class="sectionTitle">Breakdown targets (per-jet)</div>
+          <div class="sectionTitle">Breakdowns (each has its own jets)</div>
           <div id="breakdownsBox"></div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="stickyBar">
-    <div class="stickyInner">
-      <button class="saveBtn" id="saveBtn" type="button">Create tracker</button>
+    <div class="stickyBar">
+      <div class="stickyInner">
+        <button class="saveBtn" id="saveBtn" type="button">Create tracker</button>
+      </div>
     </div>
   </div>
 

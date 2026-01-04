@@ -22,52 +22,28 @@ function setWarn(msg){
 
 function upgradeTrackerSchema(tr){
   if (!tr) return tr;
-
-  const jets = { ...(tr.jets || {}) };
-  for (const [k,v] of Object.entries(jets)){
-    if (!v || typeof v !== 'object') continue;
-    if (v.target == null && v.max != null) v.target = v.max;
-    if (v.current == null) v.current = 0;
-    delete v.max;
-  }
-
-  const breakdowns = Array.isArray(tr.breakdowns) ? tr.breakdowns.map(b => {
-    const bj = { ...(b.jets || {}) };
-    for (const [k,v] of Object.entries(bj)){
-      if (!v || typeof v !== 'object') continue;
-      if (v.target == null && v.max != null) v.target = v.max;
-      if (v.current == null) v.current = 0;
-      delete v.max;
-    }
-    return {
-      id: b.id || uidBd(),
-      name: b.name ?? '',
-      totalTarget: b.totalTarget ?? b.totalMax ?? 0,
-      jets: bj
-    };
-  }) : [];
+  const breakdowns = Array.isArray(tr.breakdowns) ? tr.breakdowns.map(b => ({
+    id: b.id || uidBd(),
+    name: b.name ?? '',
+    totalTarget: b.totalTarget ?? 0,
+    jets: b.jets || {} // keys define selected jets per breakdown
+  })) : [];
 
   return {
     ...tr,
-    totalTarget: tr.totalTarget ?? tr.totalMax ?? 0,
+    totalTarget: tr.totalTarget ?? 0,
     autoSplit: tr.autoSplit ?? false,
     collapsed: tr.collapsed ?? false,
-    jets,
+    jets: tr.jets || {},
     breakdowns,
     checklistItemName: tr.checklistItemName ?? null
   };
 }
 
-/** ---------- AUTH / CHECKLIST ---------- */
-
+/* ---------- AUTH / CHECKLIST ---------- */
 async function isAuthorized(){
-  try{
-    return await t.getRestApi().isAuthorized();
-  }catch{
-    return false;
-  }
+  try{ return await t.getRestApi().isAuthorized(); } catch{ return false; }
 }
-
 async function authorize(){
   return t.authorize({
     scope: { read: true, write: false },
@@ -75,9 +51,7 @@ async function authorize(){
     name: "Waterjet Run Tracker"
   });
 }
-
 async function fetchChecklistItemsFlat(){
-  // REST first (stable)
   try{
     const rest = t.getRestApi();
     const ok = await rest.isAuthorized();
@@ -88,7 +62,6 @@ async function fetchChecklistItemsFlat(){
         fields: 'name',
         checkItem_fields: 'name'
       });
-
       const out = [];
       for (const cl of (checklists || [])){
         for (const it of (cl.checkItems || [])){
@@ -100,7 +73,7 @@ async function fetchChecklistItemsFlat(){
     }
   }catch{ /* ignore */ }
 
-  // Fallback (flaky)
+  // fallback
   try{
     const card = await t.card('checklists');
     const lists = card?.checklists || [];
@@ -125,12 +98,7 @@ async function fetchChecklistItemsFlat(){
   }
 }
 
-/** ---------- JET AUTO SELECT FROM Machine(s) ---------- */
-/**
- * Your setup: one custom field named "Machine(s)" with multi selection values like:
- * "Waterjet #1, Waterjet #3"
- * We parse value.text as comma-separated, and also handle single list option.
- */
+/* ---------- JET AUTO SELECT FROM Machine(s) ---------- */
 async function guessJetsFromMachineField(){
   try{
     const card = await t.card('customFieldItems', 'customFields');
@@ -144,9 +112,9 @@ async function guessJetsFromMachineField(){
     const addFromChunk = (chunk) => {
       const s = String(chunk || '').toLowerCase();
       if (!s) return;
-      if (s.includes('#1') || s.includes('waterjet 1') || s.includes('waterjet #1')) selected.add("Waterjet 1");
-      if (s.includes('#2') || s.includes('waterjet 2') || s.includes('waterjet #2')) selected.add("Waterjet 2");
-      if (s.includes('#3') || s.includes('waterjet 3') || s.includes('waterjet #3')) selected.add("Waterjet 3");
+      if (s.includes('#1') || s.includes('waterjet 1')) selected.add("Waterjet 1");
+      if (s.includes('#2') || s.includes('waterjet 2')) selected.add("Waterjet 2");
+      if (s.includes('#3') || s.includes('waterjet 3')) selected.add("Waterjet 3");
     };
 
     for (const it of items){
@@ -154,18 +122,12 @@ async function guessJetsFromMachineField(){
       const fieldName = (def?.name || '').trim().toLowerCase();
       if (fieldName !== 'machine(s)') continue;
 
-      // list option single
       if (it.idValue){
         const opt = (def?.options || []).find(o => o.id === it.idValue);
         addFromChunk(opt?.value?.text || '');
       }
-
-      // text (often used by multi-select type power-ups / mirrored values)
       if (it.value?.text){
-        const parts = String(it.value.text)
-          .split(/[,\n]/g)
-          .map(x => x.trim())
-          .filter(Boolean);
+        const parts = String(it.value.text).split(/[,\n]/g).map(x => x.trim()).filter(Boolean);
         for (const p of parts) addFromChunk(p);
       }
     }
@@ -177,8 +139,7 @@ async function guessJetsFromMachineField(){
   }
 }
 
-/** ---------- UI HELPERS ---------- */
-
+/* ---------- UI HELPERS ---------- */
 function buildJetToggles(selected){
   const wrap = document.getElementById('jetToggles');
   wrap.innerHTML = '';
@@ -189,20 +150,18 @@ function buildJetToggles(selected){
     btn.dataset.jet = jet;
     btn.dataset.on = selected.includes(jet) ? 'true' : 'false';
     btn.textContent = jet;
-
     btn.addEventListener('click', () => {
       btn.dataset.on = (btn.dataset.on === 'true') ? 'false' : 'true';
-      // re-render both modes
       renderSimpleJetTargets();
       renderBreakdowns();
       ensureModeVisibility();
+      t.sizeTo(document.body);
     });
-
     wrap.appendChild(btn);
   }
 }
 
-function selectedJets(){
+function selectedDefaultJets(){
   return Array.from(document.querySelectorAll('#jetToggles .chipBtn'))
     .filter(b => b.dataset.on === 'true')
     .map(b => b.dataset.jet);
@@ -212,18 +171,17 @@ function isAutoSplitOn(){
   return document.getElementById('autoSplit').value === 'on';
 }
 
-/** ---------- SIMPLE MODE TARGETS ---------- */
-
+/* ---------- SIMPLE MODE TARGETS ---------- */
 function renderSimpleJetTargets(existingJets = null){
   const box = document.getElementById('jetsBox');
   box.innerHTML = '';
 
-  const jets = selectedJets();
+  const jets = selectedDefaultJets();
   if (!jets.length){
     const div = document.createElement('div');
     div.style.fontWeight = '900';
     div.style.color = '#555';
-    div.textContent = 'Select at least one jet above.';
+    div.textContent = 'Select at least one default jet above.';
     box.appendChild(div);
     return;
   }
@@ -242,7 +200,6 @@ function renderSimpleJetTargets(existingJets = null){
     input.step = 'any';
     input.inputMode = 'decimal';
     input.dataset.jet = jet;
-
     if (existingJets?.[jet]?.target != null) input.value = existingJets[jet].target;
 
     line.appendChild(left);
@@ -252,8 +209,8 @@ function renderSimpleJetTargets(existingJets = null){
 }
 
 function applyAutoSplitSimple(){
-  const jets = selectedJets();
-  if (!jets.length){ setWarn('Select at least one jet first.'); return; }
+  const jets = selectedDefaultJets();
+  if (!jets.length){ setWarn('Select at least one default jet first.'); return; }
 
   const totalRaw = document.getElementById('totalTarget').value;
   const total = round3(totalRaw);
@@ -269,7 +226,7 @@ function applyAutoSplitSimple(){
 
 function readSimpleJets(existingJets){
   const jets = {};
-  for (const jet of selectedJets()){
+  for (const jet of selectedDefaultJets()){
     const inp = document.querySelector(`#jetsBox .jetTarget[data-jet="${jet}"]`);
     const target = round3(inp?.value);
     const prev = existingJets?.[jet];
@@ -278,26 +235,26 @@ function readSimpleJets(existingJets){
   return jets;
 }
 
-/** ---------- BREAKDOWNS MODE ---------- */
-
-let breakdowns = []; // local working state
+/* ---------- BREAKDOWNS MODE (each has its own jets) ---------- */
+let breakdowns = [];
 
 function ensureModeVisibility(){
-  const hasBreakdowns = Array.isArray(breakdowns) && breakdowns.length > 0;
-  document.getElementById('simpleTargetsWrap').style.display = hasBreakdowns ? 'none' : 'block';
-  document.getElementById('breakdownsWrap').style.display = hasBreakdowns ? 'block' : 'none';
+  const has = breakdowns.length > 0;
+  document.getElementById('simpleTargetsWrap').style.display = has ? 'none' : 'block';
+  document.getElementById('breakdownsWrap').style.display = has ? 'block' : 'none';
 }
 
 function addBreakdown(prefill = null){
-  const jets = {};
-  for (const j of selectedJets()){
-    jets[j] = { current: 0, target: 0 };
-  }
+  const defaults = selectedDefaultJets();
+  const initialJets = (prefill?.jets && Object.keys(prefill.jets).length)
+    ? prefill.jets
+    : Object.fromEntries(defaults.map(j => [j, { current: 0, target: 0 }]));
+
   breakdowns.push({
     id: prefill?.id || uidBd(),
     name: prefill?.name || '',
     totalTarget: prefill?.totalTarget ?? 0,
-    jets: prefill?.jets || jets
+    jets: initialJets
   });
 }
 
@@ -305,19 +262,34 @@ function removeBreakdown(id){
   breakdowns = breakdowns.filter(b => b.id !== id);
 }
 
-function applyAutoSplitBreakdowns(){
-  const jets = selectedJets();
-  if (!jets.length){ setWarn('Select at least one jet first.'); return; }
-  if (!breakdowns.length){ setWarn('Add at least one breakdown first.'); return; }
+function breakdownSelectedJets(bd){
+  return Object.keys(bd.jets || {});
+}
 
+function toggleBreakdownJet(bd, jetName){
+  bd.jets = bd.jets || {};
+  if (bd.jets[jetName]){
+    delete bd.jets[jetName];
+  } else {
+    bd.jets[jetName] = { current: 0, target: 0 };
+  }
+  // enforce at least one jet
+  if (!Object.keys(bd.jets).length){
+    bd.jets[jetName] = { current: 0, target: 0 };
+  }
+}
+
+function applyAutoSplitBreakdowns(){
+  if (!breakdowns.length){ setWarn('Add at least one breakdown first.'); return; }
   setWarn('');
+
   for (const bd of breakdowns){
+    const jets = breakdownSelectedJets(bd);
     const total = round3(bd.totalTarget);
     if (!total || total <= 0) continue;
-    const perJet = round3(total / jets.length);
+    const per = round3(total / jets.length);
     for (const j of jets){
-      if (!bd.jets[j]) bd.jets[j] = { current: 0, target: 0 };
-      bd.jets[j].target = perJet;
+      bd.jets[j].target = per;
     }
   }
   renderBreakdowns();
@@ -327,26 +299,7 @@ function renderBreakdowns(){
   const box = document.getElementById('breakdownsBox');
   box.innerHTML = '';
 
-  const jets = selectedJets();
-  if (!jets.length){
-    const div = document.createElement('div');
-    div.style.fontWeight = '900';
-    div.style.color = '#555';
-    div.textContent = 'Select at least one jet above.';
-    box.appendChild(div);
-    return;
-  }
-
   for (const bd of breakdowns){
-    // ensure jets exist
-    for (const j of jets){
-      if (!bd.jets[j]) bd.jets[j] = { current: 0, target: 0 };
-    }
-    // remove deselected jets from breakdown
-    for (const key of Object.keys(bd.jets)){
-      if (!jets.includes(key)) delete bd.jets[key];
-    }
-
     const card = document.createElement('div');
     card.className = 'bdCard';
 
@@ -365,6 +318,7 @@ function renderBreakdowns(){
       removeBreakdown(bd.id);
       renderBreakdowns();
       ensureModeVisibility();
+      t.sizeTo(document.body);
     });
 
     headerRow.appendChild(left);
@@ -397,10 +351,33 @@ function renderBreakdowns(){
     top.appendChild(nameWrap);
     top.appendChild(tgtWrap);
 
+    const jetsTitle = document.createElement('div');
+    jetsTitle.className = 'bdJetsTitle';
+    jetsTitle.textContent = 'Jets for this breakdown';
+
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+
+    for (const j of JETS){
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chipBtn';
+      btn.textContent = j;
+      btn.dataset.on = bd.jets?.[j] ? 'true' : 'false';
+      btn.addEventListener('click', () => {
+        toggleBreakdownJet(bd, j);
+        renderBreakdowns();
+        ensureModeVisibility();
+        t.sizeTo(document.body);
+      });
+      chips.appendChild(btn);
+    }
+
     const panel = document.createElement('div');
     panel.className = 'panel';
 
-    for (const j of jets){
+    const selected = breakdownSelectedJets(bd);
+    for (const j of selected){
       const line = document.createElement('div');
       line.className = 'jetLine';
 
@@ -413,9 +390,7 @@ function renderBreakdowns(){
       inp.type = 'number';
       inp.step = 'any';
       inp.value = bd.jets[j]?.target ?? 0;
-      inp.addEventListener('input', e => {
-        bd.jets[j].target = round3(e.target.value);
-      });
+      inp.addEventListener('input', e => { bd.jets[j].target = round3(e.target.value); });
 
       line.appendChild(nm);
       line.appendChild(inp);
@@ -424,59 +399,60 @@ function renderBreakdowns(){
 
     card.appendChild(headerRow);
     card.appendChild(top);
+    card.appendChild(jetsTitle);
+    card.appendChild(chips);
     card.appendChild(panel);
 
     box.appendChild(card);
   }
 }
 
-/** ---------- APPLY AUTO SPLIT (SMART) ---------- */
+/* ---------- APPLY AUTO SPLIT ---------- */
 function applyAutoSplit(){
-  // if breakdowns exist -> split within each breakdown total
-  if (breakdowns.length){
-    return applyAutoSplitBreakdowns();
-  }
-  // else split simple
+  if (breakdowns.length) return applyAutoSplitBreakdowns();
   return applyAutoSplitSimple();
 }
 
-/** ---------- SAVE ---------- */
+/* ---------- VALIDATION ---------- */
 function validate(){
-  const jets = selectedJets();
-  if (!jets.length){ setWarn('Select at least one jet.'); return false; }
-
+  // breakdown mode
   if (breakdowns.length){
     for (const b of breakdowns){
       if (!String(b.name || '').trim()){
         setWarn('Each breakdown needs a name.');
         return false;
       }
-      // allow 0 target, but targets must be numeric
+      const jets = breakdownSelectedJets(b);
+      if (!jets.length){
+        setWarn(`Breakdown "${b.name}" must include at least one jet.`);
+        return false;
+      }
       for (const j of jets){
-        const v = b.jets?.[j]?.target;
-        if (!Number.isFinite(n(v))){
+        if (!Number.isFinite(n(b.jets?.[j]?.target))){
           setWarn(`Invalid target on breakdown "${b.name}" for ${j}.`);
           return false;
         }
       }
     }
-  } else {
-    // simple
-    for (const j of jets){
-      const inp = document.querySelector(`#jetsBox .jetTarget[data-jet="${j}"]`);
-      const v = inp?.value;
-      if (!Number.isFinite(n(v))){
-        setWarn(`Invalid target for ${j}.`);
-        return false;
-      }
-    }
+    setWarn('');
+    return true;
   }
 
+  // simple mode
+  const jets = selectedDefaultJets();
+  if (!jets.length){ setWarn('Select at least one default jet.'); return false; }
+  for (const j of jets){
+    const inp = document.querySelector(`#jetsBox .jetTarget[data-jet="${j}"]`);
+    if (!Number.isFinite(n(inp?.value))){
+      setWarn(`Invalid target for ${j}.`);
+      return false;
+    }
+  }
   setWarn('');
   return true;
 }
 
-/** ---------- BOOT ---------- */
+/* ---------- BOOT ---------- */
 async function boot(){
   const mode = qs('mode');
   const editId = qs('id');
@@ -486,14 +462,9 @@ async function boot(){
   const saveBtn = document.getElementById('saveBtn');
   const authBtn = document.getElementById('authBtn');
 
-  // auth button visibility
   const authed = await isAuthorized();
   authBtn.style.display = authed ? 'none' : 'inline-block';
-  authBtn.addEventListener('click', async () => {
-    await authorize();
-    // refresh dropdown after auth
-    await boot();
-  });
+  authBtn.onclick = async () => { await authorize(); await boot(); };
 
   const all = await loadAll();
   let editing = null;
@@ -502,13 +473,10 @@ async function boot(){
   const checklistSelect = document.getElementById('checklist');
   checklistSelect.innerHTML = '<option value="">— Not linked —</option>';
   const items = await fetchChecklistItemsFlat();
-
-  if (!items.length){
-    // This matches your “shows only after toggle” symptom — authorization fixes it.
-    if (!authed){
-      setWarn('Checklist items not loaded. Click “Authorize (fix checklist)”.');
-    }
-  } else {
+  if (!items.length && !authed){
+    setWarn('Checklist items not loaded. Click “Authorize (fix checklist)”.');
+  }
+  if (items.length){
     let currentGroup = null;
     let currentName = null;
     for (const it of items){
@@ -525,17 +493,15 @@ async function boot(){
     }
   }
 
-  // Jet toggles default
+  // Default jets
   const guessed = await guessJetsFromMachineField();
   const defaultJets = (guessed && guessed.length) ? guessed : [...JETS];
 
-  // Clear local breakdowns
   breakdowns = [];
 
   // Edit mode
   if (mode === 'edit' && editId && all[editId]){
     editing = upgradeTrackerSchema(all[editId]);
-
     title.textContent = 'Edit Run Tracker';
     subtitle.textContent = 'Targets, jets, optional link, and Run Breakdown.';
     saveBtn.textContent = 'Save changes';
@@ -544,12 +510,12 @@ async function boot(){
     document.getElementById('totalTarget').value = (editing.totalTarget ? editing.totalTarget : '');
     document.getElementById('autoSplit').value = editing.autoSplit ? 'on' : 'off';
 
+    // Default jets for simple mode, or if user switches back
     const selected = Object.keys(editing.jets || {}).length ? Object.keys(editing.jets) : defaultJets;
     buildJetToggles(selected);
 
     if (editing.checklistItemId) checklistSelect.value = editing.checklistItemId;
 
-    // load breakdowns from saved
     if (editing.breakdowns && editing.breakdowns.length){
       breakdowns = editing.breakdowns.map(b => ({
         id: b.id || uidBd(),
@@ -561,7 +527,6 @@ async function boot(){
     } else {
       renderSimpleJetTargets(editing.jets || {});
     }
-
   } else {
     // Create mode
     buildJetToggles(defaultJets);
@@ -570,23 +535,23 @@ async function boot(){
 
   ensureModeVisibility();
 
-  // Buttons
-  document.getElementById('applyAuto').addEventListener('click', () => applyAutoSplit());
+  document.getElementById('applyAuto').onclick = () => { applyAutoSplit(); t.sizeTo(document.body); };
 
-  document.getElementById('addBreakdownBtn').addEventListener('click', () => {
+  document.getElementById('addBreakdownBtn').onclick = () => {
     addBreakdown();
     renderBreakdowns();
     ensureModeVisibility();
-  });
+    t.sizeTo(document.body);
+  };
 
-  document.getElementById('clearBreakdownsBtn').addEventListener('click', () => {
+  document.getElementById('clearBreakdownsBtn').onclick = () => {
     breakdowns = [];
     renderSimpleJetTargets(editing?.jets || null);
     ensureModeVisibility();
-  });
+    t.sizeTo(document.body);
+  };
 
-  // Save
-  saveBtn.addEventListener('click', async () => {
+  saveBtn.onclick = async () => {
     if (!validate()) return;
 
     const nameRaw = document.getElementById('name').value.trim();
@@ -600,26 +565,27 @@ async function boot(){
     const totalTarget = totalTargetRaw === '' ? 0 : round3(totalTargetRaw);
     const autoSplit = isAutoSplitOn();
 
-    // Build payload
     let jets = {};
     let finalBreakdowns = [];
 
     if (breakdowns.length){
-      // breakdown mode ignores simple jets targets
-      finalBreakdowns = breakdowns.map(b => ({
-        id: b.id || uidBd(),
-        name: String(b.name || '').trim(),
-        totalTarget: round3(b.totalTarget),
-        jets: Object.fromEntries(Object.entries(b.jets || {}).map(([k,v]) => [
-          k,
-          { current: editing ? (findExistingBreakdownJetCurrent(editing, b.id, k) ?? 0) : 0, target: round3(v.target) }
-        ]))
-      }));
-
-      // Set tracker jets empty (not used)
-      jets = {};
+      finalBreakdowns = breakdowns.map(b => {
+        const outJets = {};
+        for (const [jetName, jetObj] of Object.entries(b.jets || {})){
+          const prevCurrent = findExistingBreakdownJetCurrent(editing, b.id, jetName) ?? 0;
+          outJets[jetName] = { current: round3(prevCurrent), target: round3(jetObj.target) };
+        }
+        return {
+          id: b.id || uidBd(),
+          name: String(b.name || '').trim(),
+          totalTarget: round3(b.totalTarget),
+          jets: outJets
+        };
+      });
+      jets = {}; // not used in breakdown mode (UI shows aggregated summary instead)
     } else {
       jets = readSimpleJets(editing?.jets || null);
+      finalBreakdowns = [];
     }
 
     const payload = upgradeTrackerSchema({
@@ -644,15 +610,15 @@ async function boot(){
     all[id] = payload;
     await saveAll(all);
     return t.closeModal();
-  });
+  };
 
   t.sizeTo(document.body);
 }
 
-// pull existing current values when editing breakdowns
 function findExistingBreakdownJetCurrent(editing, breakdownId, jetName){
   try{
-    const b = (editing.breakdowns || []).find(x => x.id === breakdownId);
+    if (!editing?.breakdowns?.length) return null;
+    const b = editing.breakdowns.find(x => x.id === breakdownId);
     if (!b) return null;
     const j = b.jets?.[jetName];
     if (!j) return null;
