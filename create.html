@@ -3,193 +3,233 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Create/Edit Run Tracker</title>
+  <title>Run Tracker</title>
 
   <style>
     :root{
       --bg:#ffffff;
       --text:#111111;
       --muted:#555555;
+
       --border:#d0d0d0;
       --soft:#f4f4f4;
 
       --btn-bg:#eeeeee;
       --btn-text:#111111;
+      --btn-hover:#1e9b4b;
+
       --primary-bg:#111111;
       --primary-text:#ffffff;
-      --danger:#c21818;
-      --accent:#1e9b4b;
+      --primary-hover:#1e9b4b;
+
+      --danger:#b00020;
     }
 
-    *{ box-sizing:border-box; }
-
-    body{
+    html, body{
+      height:100%;
+      overflow:auto;
       margin:0;
-      padding:14px;
-      background:var(--bg);
       color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:var(--bg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    h1{
-      margin:0 0 2px 0;
-      font-size:24px;
-      font-weight:950;
+    .wrap{
+      padding:14px;
+      max-width: 1040px;
+      margin: 0 auto;
     }
 
-    .sub{
-      margin:0 0 12px 0;
-      color:var(--muted);
-      font-weight:750;
-      font-size:13px;
+    h2{ margin:0 0 6px 0; font-weight:950; letter-spacing:-0.2px; }
+    .muted{ color:var(--muted); font-weight:800; font-size:13px; margin-bottom:14px; line-height:1.35; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap:14px;
+    }
+    @media (max-width: 900px){
+      .grid{ grid-template-columns: 1fr; }
     }
 
     .card{
       border:1px solid var(--border);
-      border-radius:14px;
-      padding:12px;
+      border-radius:16px;
+      padding:14px;
       background:#fff;
-      margin-bottom:12px;
     }
 
     label{
       display:block;
-      font-weight:900;
+      font-weight:950;
+      margin-top:12px;
       margin-bottom:6px;
-      color:var(--text);
     }
 
     input, select{
       width:100%;
+      height:44px;
       border:1px solid var(--border);
       border-radius:12px;
-      padding:10px 12px;
+      padding:0 12px;
       font-size:14px;
-      font-weight:750;
+      font-weight:900;
+      color:var(--text);
       background:#fff;
+      box-sizing:border-box;
     }
 
     .row{
       display:flex;
       gap:12px;
       align-items:flex-end;
-      margin-top:10px;
       flex-wrap:wrap;
     }
-
-    .row > div{
-      flex:1;
-      min-width:220px;
-    }
+    .row > div{ flex:1; min-width: 220px; }
 
     .btn{
+      height:42px;
+      border-radius:12px;
       border:1px solid var(--border);
       background:var(--btn-bg);
       color:var(--btn-text);
-      font-weight:900;
-      padding:10px 12px;
-      border-radius:12px;
+      font-weight:950;
       cursor:pointer;
+      padding:0 14px;
       user-select:none;
       white-space:nowrap;
     }
-    .btn:hover{ border-color:var(--accent); }
-
-    .btnPrimary{
-      border:1px solid #0d0d0d;
-      background:var(--primary-bg);
-      color:var(--primary-text);
-      font-weight:950;
-      padding:12px 16px;
-      border-radius:14px;
-      cursor:pointer;
+    .btn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
     }
-    .btnPrimary:hover{ background:#0e0e0e; }
+
+    .btnSmall{
+      height:36px;
+      padding:0 12px;
+      border-radius:10px;
+      font-size:13px;
+      font-weight:950;
+    }
 
     .btnDanger{
-      border:1px solid rgba(194,24,24,.35);
+      border-color:#ffb3be;
       background:#fff;
       color:var(--danger);
-      font-weight:950;
     }
-    .btnDanger:hover{ background:rgba(194,24,24,.06); }
-
-    .sectionTitle{
-      margin-top:14px;
-      font-size:12px;
-      text-transform:uppercase;
-      letter-spacing:.5px;
-      color:var(--muted);
-      font-weight:950;
+    .btnDanger:hover{
+      border-color:var(--danger);
+      color:var(--danger);
     }
 
     .chips{
       display:flex;
+      gap:10px;
       flex-wrap:wrap;
-      gap:8px;
-      margin-top:8px;
+      margin-top:10px;
     }
 
-    .chip{
+    .chipBtn{
       border:1px solid var(--border);
-      background:#fff;
+      background:var(--btn-bg);
+      color:var(--btn-text);
       border-radius:999px;
-      padding:8px 12px;
-      font-weight:900;
-      font-size:13px;
+      padding:10px 12px;
+      font-weight:950;
       cursor:pointer;
       user-select:none;
     }
-    .chip.on{
-      background:rgba(30,155,75,.12);
-      border-color:rgba(30,155,75,.45);
-      color:#0a6f2d;
+    .chipBtn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
     }
-    .chip:hover{ border-color:var(--accent); }
+    .chipBtn[data-on="true"]{
+      background:var(--btn-hover);
+      border-color:var(--btn-hover);
+      color:#fff;
+    }
+
+    .warn{
+      margin-top:10px;
+      color:var(--danger);
+      font-weight:900;
+      font-size:13px;
+      display:none;
+    }
+
+    .stickyBar{
+      position: sticky;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background:#fff;
+      border-top:1px solid var(--border);
+      padding:10px 14px;
+      box-shadow: 0 -8px 20px rgba(0,0,0,0.06);
+      margin-top: 12px;
+    }
+    .stickyInner{
+      max-width: 1040px;
+      margin:0 auto;
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      align-items:center;
+    }
+
+    .saveBtn{
+      min-width: 220px;
+      height:46px;
+      border-radius:14px;
+      border:1px solid var(--primary-bg);
+      background:var(--primary-bg);
+      color:var(--primary-text);
+      font-weight:950;
+      cursor:pointer;
+      font-size:15px;
+    }
+    .saveBtn:hover{
+      background:var(--primary-hover);
+      border-color:var(--primary-hover);
+    }
+
+    .sectionTitle{
+      margin-top:12px;
+      font-weight:950;
+      color:var(--muted);
+      font-size:13px;
+    }
 
     .panel{
       border:1px solid var(--border);
       border-radius:14px;
-      padding:10px;
       background:var(--soft);
+      padding:12px;
       margin-top:10px;
     }
 
     .jetLine{
       display:flex;
-      align-items:center;
       justify-content:space-between;
-      gap:10px;
-      padding:10px;
-      border-radius:12px;
-      background:#fff;
-      border:1px solid var(--border);
-      margin-bottom:8px;
+      align-items:center;
+      gap:12px;
+      padding:8px 0;
+      border-bottom:1px solid #e0e0e0;
     }
-
-    .jetName{
-      font-weight:950;
-      min-width:110px;
-    }
-
+    .jetLine:last-child{ border-bottom:none; }
+    .jetName{ font-weight:950; min-width:120px; }
     .jetTarget{
-      max-width:160px;
-      text-align:center;
-      font-weight:950;
-    }
-
-    .warn{
-      margin-top:10px;
-      border:1px solid rgba(194,24,24,.35);
-      background:rgba(194,24,24,.06);
-      color:#8c1010;
-      padding:10px;
+      width: 180px;
+      height: 40px;
       border-radius:12px;
-      font-weight:900;
-      display:none;
+      border:1px solid var(--border);
+      padding:0 12px;
+      font-weight:950;
+      text-align:center;
+      background:#fff;
     }
 
-    .breakdownCard{
+    .bdCard{
       border:1px solid var(--border);
       border-radius:14px;
       background:#fff;
@@ -197,88 +237,106 @@
       margin-top:10px;
     }
 
-    .breakdownHead{
+    .bdHeaderRow{
       display:flex;
-      justify-content:space-between;
       align-items:center;
+      justify-content:space-between;
       gap:10px;
       margin-bottom:8px;
     }
 
-    .stickyFooter{
-      position:sticky;
-      bottom:0;
-      background:linear-gradient(180deg, rgba(255,255,255,.75), #fff);
-      padding-top:10px;
-      padding-bottom:6px;
-      border-top:1px solid var(--border);
-      margin-top:12px;
+    .bdHeader{
+      font-weight:950;
+      color:var(--muted);
+      font-size:13px;
     }
 
+    .bdTop{
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      margin-bottom: 8px;
+    }
+    .bdTop > div{ flex:1; min-width: 220px; }
+
+    .bdJetsTitle{
+      margin-top:8px;
+      font-weight:950;
+      color:var(--muted);
+      font-size:12px;
+    }
   </style>
+
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
 
 <body>
-  <h1 id="title">Create Run Tracker</h1>
-  <div class="sub">Targets, jets, optional link, and Run Breakdown.</div>
+  <div class="wrap">
+    <h2 id="title">Create Run Tracker</h2>
+    <div class="muted" id="subtitle">Targets, jets, optional link, and Run Breakdown.</div>
 
-  <div class="card">
-    <label>Tracker name (optional)</label>
-    <input id="name" type="text" placeholder="Example: I-50 Shield / Phase A / etc." />
+    <div class="grid">
+      <div class="card">
+        <label>Tracker name (optional)</label>
+        <input id="name" placeholder="Example: I-50 Shield / Phase A / etc." />
 
-    <div class="row">
-      <div style="flex:2; min-width:260px;">
         <label>Link to checklist item (optional)</label>
-        <select id="checklistSelect">
-          <option value="">— Not linked —</option>
-        </select>
+        <div class="row" style="gap:10px;">
+          <div style="flex:1; min-width:240px;">
+            <select id="checklist">
+              <option value="">— Not linked —</option>
+            </select>
+          </div>
+          <div style="flex:0; min-width:220px;">
+            <button class="btn" id="authBtn" type="button" style="display:none;">Authorize (fix checklist)</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Total target (optional)</label>
+            <input id="totalTarget" type="number" step="any" value="" placeholder="Leave blank to use sum of targets" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="btn" id="applyAuto" type="button">Apply Auto-Split</button>
+        </div>
+
+        <div class="sectionTitle">Run Breakdown (optional)</div>
+
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="addBreakdownBtn" type="button">+ Add Breakdown</button>
+          <button class="btn btnDanger" id="clearBreakdownsBtn" type="button">Remove all breakdowns</button>
+        </div>
+
+        <div class="warn" id="warn"></div>
       </div>
-      <div style="flex:0; min-width:220px;">
-        <button class="btn" id="authBtn" type="button" style="display:none;">Authorize (fix checklist)</button>
+
+      <div class="card" id="defaultJetsCard">
+        <label id="defaultJetsLabel">Default jets (used for “no breakdown” mode + new breakdowns)</label>
+        <div class="chips" id="jetToggles"></div>
+
+        <div id="simpleTargetsWrap">
+          <div class="sectionTitle">Per-jet targets (no breakdown)</div>
+          <div class="panel" id="jetsBox"></div>
+        </div>
+
+        <div id="breakdownsWrap" style="display:none;">
+          <div class="sectionTitle">Breakdowns (each has its own jets)</div>
+          <div id="breakdownsBox"></div>
+        </div>
       </div>
     </div>
 
-    <div class="row">
-      <div>
-        <label>Total target (optional)</label>
-        <input id="totalTarget" type="number" step="any" value="" placeholder="Leave blank to use sum of targets" />
+    <div class="stickyBar">
+      <div class="stickyInner">
+        <button class="saveBtn" id="saveBtn" type="button">Create tracker</button>
       </div>
     </div>
-
-    <div class="row" style="margin-top:12px;">
-      <button class="btn" id="applyAuto" type="button">Apply Auto-Split</button>
-    </div>
-
-    <div class="sectionTitle">Run Breakdown (optional)</div>
-
-    <div class="row" style="margin-top:10px;">
-      <button class="btn" id="addBreakdownBtn" type="button">+ Add Breakdown</button>
-      <button class="btn btnDanger" id="clearBreakdownsBtn" type="button">Remove all breakdowns</button>
-    </div>
-
-    <div class="warn" id="warn"></div>
   </div>
 
-  <div class="card" id="defaultJetsCard">
-    <label id="defaultJetsLabel">Default jets (used for “no breakdown” mode + new breakdowns)</label>
-    <div class="chips" id="jetToggles"></div>
-
-    <div id="simpleTargetsWrap">
-      <div class="sectionTitle">Per-jet targets (no breakdown)</div>
-      <div class="panel" id="jetsBox"></div>
-    </div>
-
-    <div id="breakdownsWrap" style="display:none;">
-      <div class="sectionTitle">Breakdowns (each has its own jets)</div>
-      <div id="breakdownsBox"></div>
-    </div>
-  </div>
-
-  <div class="stickyFooter">
-    <button class="btnPrimary" id="saveBtn" style="width:100%;">Create tracker</button>
-  </div>
-
-  <script src="https://p.trellocdn.com/power-up.min.js"></script>
   <script src="./create.js"></script>
 </body>
 </html>

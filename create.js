@@ -1,17 +1,15 @@
 /* global TrelloPowerUp */
 const t = TrelloPowerUp.iframe();
 const STORAGE_KEY = 'trackers';
+const JETS = ["Waterjet 1", "Waterjet 2", "Waterjet 3"];
 
-function n(v){ const x = parseFloat(v); return Number.isFinite(x) ? x : 0; }
-function round3(v){
-  const x = parseFloat(v);
-  if (!Number.isFinite(x)) return 0;
-  return Math.round(x*1000)/1000;
-}
-function uid(){ return 'tr_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36); }
-function uidBd(){ return 'bd_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36); }
+function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
+function round3(v){ return Math.round(n(v) * 1000) / 1000; }
+function uid(){ return 'trk_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+function uidBd(){ return 'bd_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+function qs(name){ try{ return new URL(window.location.href).searchParams.get(name); } catch{ return null; } }
 
-async function loadAll(){ return (await t.get('card','shared',STORAGE_KEY)) || {}; }
+async function loadAll(){ return await t.get('card','shared',STORAGE_KEY,{}); }
 async function saveAll(all){ await t.set('card','shared',STORAGE_KEY,all); }
 
 function setWarn(msg){
@@ -28,31 +26,21 @@ function upgradeTrackerSchema(tr){
     id: b.id || uidBd(),
     name: b.name ?? '',
     totalTarget: b.totalTarget ?? 0,
-    jets: b.jets ?? {}
+    jets: b.jets || {} // keys define selected jets per breakdown
   })) : [];
 
-  const jets = tr.jets ?? {};
-  const out = {
-    id: tr.id || uid(),
-    name: tr.name ?? null,
-    checklistItemId: tr.checklistItemId ?? null,
-    checklistItemName: tr.checklistItemName ?? null,
+  return {
+    ...tr,
     totalTarget: tr.totalTarget ?? 0,
     autoSplit: tr.autoSplit ?? false,
     collapsed: tr.collapsed ?? false,
-    jets,
-    breakdowns
+    jets: tr.jets || {},
+    breakdowns,
+    checklistItemName: tr.checklistItemName ?? null
   };
-  return out;
 }
 
-function getQS(){
-  const q = {};
-  const s = new URLSearchParams(window.location.search);
-  for (const [k,v] of s.entries()) q[k]=v;
-  return q;
-}
-
+/* ---------- AUTH / CHECKLIST ---------- */
 async function isAuthorized(){
   try{ return await t.getRestApi().isAuthorized(); } catch{ return false; }
 }
@@ -63,78 +51,136 @@ async function authorize(){
     name: "Waterjet Run Tracker"
   });
 }
-
 async function fetchChecklistItemsFlat(){
   try{
     const rest = t.getRestApi();
     const ok = await rest.isAuthorized();
-    if (!ok) return [];
+    if (ok){
+      const card = await t.card('id');
+      const checklists = await rest.get(`/cards/${card.id}/checklists`, {
+        checkItems: 'all',
+        fields: 'name',
+        checkItem_fields: 'name'
+      });
+      const out = [];
+      for (const cl of (checklists || [])){
+        for (const it of (cl.checkItems || [])){
+          out.push({ id: it.id, name: it.name, checklistName: cl.name || 'Checklist' });
+        }
+      }
+      out.sort((a,b) => a.checklistName.localeCompare(b.checklistName) || a.name.localeCompare(b.name));
+      return out;
+    }
+  }catch{ /* ignore */ }
 
-    const ctx = t.getContext();
-    const cardId = ctx.card;
-
-    const token = await rest.getToken();
-    const key = rest._key;
-
-    const lists = await fetch(`https://api.trello.com/1/cards/${cardId}/checklists?key=${key}&token=${token}`).then(r=>r.json());
-    const flat = [];
-    for (const cl of (lists || [])){
-      for (const it of (cl.checkItems || [])){
-        flat.push({ id: it.id, name: it.name || '(unnamed)' });
+  // fallback
+  try{
+    const card = await t.card('checklists');
+    const lists = card?.checklists || [];
+    const out = [];
+    const seen = new Set();
+    for (const cl of lists){
+      const clName = cl?.name || 'Checklist';
+      const items = cl?.checkItems || cl?.items || cl?.checkItemStates || [];
+      for (const it of items){
+        const id = it?.id || it?.idCheckItem;
+        const name = it?.name;
+        if (!id || !name) continue;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({ id, name, checklistName: clName });
       }
     }
-    return flat;
+    out.sort((a,b) => a.checklistName.localeCompare(b.checklistNameittName || b.name.localeCompare(b.name));
+    return out;
   }catch{
     return [];
   }
 }
 
-/* ---------- Machines auto-select ---------- */
-async function readMachinesFieldJets(){
+/* ---------- JET AUTO SELECT FROM Machine(s) ---------- */
+async function guessJetsFromMachineField(){
   try{
-    const fields = await t.get('card','shared','customFieldItems');
-    // Not used; your implementation likely already sets customFieldItems elsewhere.
-    // We will fall back to "Waterjet 1/2/3" all if not available.
+    const card = await t.card('customFieldItems', 'customFields');
+    const items = card?.customFieldItems || [];
+    const fields = card?.customFields || [];
+    if (!items.length || !fields.length) return null;
+
+    const fieldById = new Map(fields.map(f => [f.id, f]));
+    const selected = new Set();
+
+    const addFromChunk = (chunk) => {
+      const s = String(chunk || '').toLowerCase();
+      if (!s) return;
+      if (s.includes('#1') || s.includes('waterjet 1')) selected.add("Waterjet 1");
+      if (s.includes('#2') || s.includes('waterjet 2')) selected.add("Waterjet 2");
+      if (s.includes('#3') || s.includes('waterjet 3')) selected.add("Waterjet 3");
+    };
+
+    for (const it of items){
+      const def = fieldById.get(it.idCustomField);
+      const fieldName = (def?.name || '').trim().toLowerCase();
+      if (fieldName !== 'machine(s)') continue;
+
+      if (it.idValue){
+        const opt = (def?.options || []).find(o => o.id === it.idValue);
+        addFromChunk(opt?.value?.text || '');
+      }
+      if (it.value?.text){
+        const parts = String(it.value.text).split(/[,\n]/g).map(x => x.trim()).filter(Boolean);
+        for (const p of parts) addFromChunk(p);
+      }
+    }
+
+    if (selected.size) return Array.from(selected);
     return null;
   }catch{
     return null;
   }
 }
 
-/* ---------- Jets UI ---------- */
-const ALL_JETS = ['Waterjet 1','Waterjet 2','Waterjet 3'];
-
-let defaultJets = new Set(ALL_JETS);
-
-function renderDefaultJetChips(){
+/* ---------- UI HELPERS ---------- */
+function buildJetToggles(selected){
   const wrap = document.getElementById('jetToggles');
   wrap.innerHTML = '';
-  for (const jet of ALL_JETS){
-    const on = defaultJets.has(jet);
-    const chip = document.createElement('div');
-    chip.className = 'chip' + (on ? ' on' : '');
-    chip.textContent = jet;
-    chip.onclick = () => {
-      if (defaultJets.has(jet)) defaultJets.delete(jet);
-      else defaultJets.add(jet);
-      renderDefaultJetChips();
-      renderSimpleTargets();
+  for (const jet of JETS){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chipBtn';
+    btn.dataset.jet = jet;
+    btn.dataset.on = selected.includes(jet) ? 'true' : 'false';
+    btn.textContent = jet;
+    btn.addEventListener('click', () => {
+      btn.dataset.on = (btn.dataset.on === 'true') ? 'false' : 'true';
+      renderSimpleJetTargets();
       renderBreakdowns();
-    };
-    wrap.appendChild(chip);
+      ensureModeVisibility();
+      t.sizeTo(document.body);
+    });
+    wrap.appendChild(btn);
   }
 }
 
 function selectedDefaultJets(){
-  const arr = Array.from(defaultJets);
-  if (!arr.length) return ['Waterjet 1']; // safety: never empty
-  return arr;
+  return Array.from(document.querySelectorAll('#jetToggles .chipBtn'))
+    .filter(b => b.dataset.on === 'true')
+    .map(b => b.dataset.jet);
 }
 
-function renderSimpleTargets(existingJets = null){
+/* ---------- SIMPLE MODE TARGETS ---------- */
+function renderSimpleJetTargets(existingJets = null){
   const box = document.getElementById('jetsBox');
   box.innerHTML = '';
+
   const jets = selectedDefaultJets();
+  if (!jets.length){
+    const div = document.createElement('div');
+    div.style.fontWeight = '900';
+    div.style.color = '#555';
+    div.textContent = 'Select at least one default jet above.';
+    box.appendChild(div);
+    return;
+  }
 
   for (const jet of jets){
     const line = document.createElement('div');
@@ -158,8 +204,10 @@ function renderSimpleTargets(existingJets = null){
   }
 }
 
-function applyAutoSplitToSimpleTargets(){
+function applyAutoSplitSimple(){
   const jets = selectedDefaultJets();
+  if (!jets.length){ setWarn('Select at least one default jet first.'); return; }
+
   const totalRaw = document.getElementById('totalTarget').value;
   const total = round3(totalRaw);
   if (!Number.isFinite(total) || total <= 0){ setWarn('Enter a Total target above 0 for auto-split.'); return; }
@@ -190,7 +238,8 @@ function ensureModeVisibility(){
   const has = breakdowns.length > 0;
   document.getElementById('simpleTargetsWrap').style.display = has ? 'none' : 'block';
   document.getElementById('breakdownsWrap').style.display = has ? 'block' : 'none';
-  // When breakdowns exist, hide the default-jets section to reduce confusion/bloat.
+
+  // ✅ Hide the entire "Default jets..." card when breakdowns exist (per your request)
   const dj = document.getElementById('defaultJetsCard');
   if (dj) dj.style.display = has ? 'none' : 'block';
 }
@@ -213,14 +262,37 @@ function removeBreakdown(id){
   breakdowns = breakdowns.filter(b => b.id !== id);
 }
 
+function breakdownSelectedJets(bd){
+  return Object.keys(bd.jets || {});
+}
+
 function toggleBreakdownJet(bd, jetName){
   bd.jets = bd.jets || {};
-  if (bd.jets[jetName]) delete bd.jets[jetName];
-  else bd.jets[jetName] = { current: 0, target: 0 };
-
-  if (!Object.keys(bd.jets).length){
-    bd.jets[selectedDefaultJets()[0]] = { current: 0, target: 0 };
+  if (bd.jets[jetName]){
+    delete bd.jets[jetName];
+  } else {
+    bd.jets[jetName] = { current: 0, target: 0 };
   }
+  // enforce at least one jet
+  if (!Object.keys(bd.jets).length){
+    bd.jets[jetName] = { current: 0, target: 0 };
+  }
+}
+
+function applyAutoSplitBreakdowns(){
+  if (!breakdowns.length){ setWarn('Add at least one breakdown first.'); return; }
+  setWarn('');
+
+  for (const bd of breakdowns){
+    const jets = breakdownSelectedJets(bd);
+    const total = round3(bd.totalTarget);
+    if (!total || total <= 0) continue;
+    const per = round3(total / jets.length);
+    for (const j of jets){
+      bd.jets[j].target = per;
+    }
+  }
+  renderBreakdowns();
 }
 
 function renderBreakdowns(){
@@ -228,203 +300,255 @@ function renderBreakdowns(){
   box.innerHTML = '';
 
   for (const bd of breakdowns){
-    const wrap = document.createElement('div');
-    wrap.className = 'breakdownCard';
+    const card = document.createElement('div');
+    card.className = 'bdCard';
 
-    const head = document.createElement('div');
-    head.className = 'breakdownHead';
+    const headerRow = document.createElement('div');
+    headerRow.className = 'bdHeaderRow';
 
     const left = document.createElement('div');
-    left.style.flex = '1';
-
-    const nameLabel = document.createElement('div');
-    nameLabel.style.fontWeight = '950';
-    nameLabel.style.marginBottom = '6px';
-    nameLabel.textContent = 'Breakdown';
-
-    left.appendChild(nameLabel);
-
-    const row1 = document.createElement('div');
-    row1.className = 'row';
-    row1.style.marginTop = '0';
-
-    const nameWrap = document.createElement('div');
-    const name = document.createElement('input');
-    name.type = 'text';
-    name.value = bd.name || '';
-    name.placeholder = 'Name (ex: Blue, Red, White, Rev 2, Lane A, etc.)';
-    name.onchange = (e) => { bd.name = e.target.value; };
-    nameWrap.appendChild(name);
-
-    const totalWrap = document.createElement('div');
-    const total = document.createElement('input');
-    total.type = 'number';
-    total.step = 'any';
-    total.inputMode = 'decimal';
-    total.value = bd.totalTarget || '';
-    total.placeholder = 'Breakdown total target (optional)';
-    total.onchange = (e) => { bd.totalTarget = (e.target.value === '' ? 0 : round3(e.target.value)); };
-    totalWrap.appendChild(total);
-
-    row1.appendChild(nameWrap);
-    row1.appendChild(totalWrap);
-
-    left.appendChild(row1);
+    left.className = 'bdHeader';
+    left.textContent = 'Breakdown';
 
     const removeBtn = document.createElement('button');
-    removeBtn.className = 'btn btnDanger';
     removeBtn.type = 'button';
+    removeBtn.className = 'btn btnSmall btnDanger';
     removeBtn.textContent = 'Remove';
-    removeBtn.onclick = () => { removeBreakdown(bd.id); ensureModeVisibility(); renderBreakdowns(); };
+    removeBtn.addEventListener('click', () => {
+      removeBreakdown(bd.id);
+      renderBreakdowns();
+      ensureModeVisibility();
+      t.sizeTo(document.body);
+    });
 
-    head.appendChild(left);
-    head.appendChild(removeBtn);
+    headerRow.appendChild(left);
+    headerRow.appendChild(removeBtn);
 
-    wrap.appendChild(head);
+    const top = document.createElement('div');
+    top.className = 'bdTop';
 
-    const jetsLabel = document.createElement('div');
-    jetsLabel.className = 'sectionTitle';
-    jetsLabel.textContent = 'Jets for this breakdown';
-    wrap.appendChild(jetsLabel);
+    const nameWrap = document.createElement('div');
+    const nameLabel = document.createElement('label');
+    nameLabel.textContent = 'Name';
+    const nameInput = document.createElement('input');
+    nameInput.value = bd.name || '';
+    nameInput.placeholder = 'Example: File A / Blue / Rev 2 / Lane 3';
+    nameInput.addEventListener('input', e => { bd.name = e.target.value; });
+    nameWrap.appendChild(nameLabel);
+    nameWrap.appendChild(nameInput);
+
+    const tgtWrap = document.createElement('div');
+    const tgtLabel = document.createElement('label');
+    tgtLabel.textContent = 'Breakdown total target';
+    const tgtInput = document.createElement('input');
+    tgtInput.type = 'number';
+    tgtInput.step = 'any';
+    tgtInput.value = bd.totalTarget ?? 0;
+    tgtInput.addEventListener('input', e => { bd.totalTarget = round3(e.target.value); });
+    tgtWrap.appendChild(tgtLabel);
+    tgtWrap.appendChild(tgtInput);
+
+    top.appendChild(nameWrap);
+    top.appendChild(tgtWrap);
+
+    const jetsTitle = document.createElement('div');
+    jetsTitle.className = 'bdJetsTitle';
+    jetsTitle.textContent = 'Jets for this breakdown';
 
     const chips = document.createElement('div');
     chips.className = 'chips';
 
-    for (const jet of ALL_JETS){
-      const on = !!bd.jets?.[jet];
-      const chip = document.createElement('div');
-      chip.className = 'chip' + (on ? ' on' : '');
-      chip.textContent = jet;
-      chip.onclick = () => { toggleBreakdownJet(bd, jet); renderBreakdowns(); };
-      chips.appendChild(chip);
+    for (const j of JETS){
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chipBtn';
+      btn.textContent = j;
+      btn.dataset.on = bd.jets?.[j] ? 'true' : 'false';
+      btn.addEventListener('click', () => {
+        toggleBreakdownJet(bd, j);
+        renderBreakdowns();
+        ensureModeVisibility();
+        t.sizeTo(document.body);
+      });
+      chips.appendChild(btn);
     }
-    wrap.appendChild(chips);
 
     const panel = document.createElement('div');
     panel.className = 'panel';
 
-    for (const [jetName, jetObj] of Object.entries(bd.jets || {})){
+    const selected = breakdownSelectedJets(bd);
+    for (const j of selected){
       const line = document.createElement('div');
       line.className = 'jetLine';
 
-      const jn = document.createElement('div');
-      jn.className = 'jetName';
-      jn.textContent = jetName;
+      const nm = document.createElement('div');
+      nm.className = 'jetName';
+      nm.textContent = j;
 
       const inp = document.createElement('input');
       inp.className = 'jetTarget';
       inp.type = 'number';
       inp.step = 'any';
-      inp.inputMode = 'decimal';
-      inp.value = jetObj.target ?? 0;
-      inp.onchange = (e) => { jetObj.target = round3(e.target.value); };
+      inp.value = bd.jets[j]?.target ?? 0;
+      inp.addEventListener('input', e => { bd.jets[j].target = round3(e.target.value); });
 
-      line.appendChild(jn);
+      line.appendChild(nm);
       line.appendChild(inp);
       panel.appendChild(line);
     }
 
-    wrap.appendChild(panel);
-    box.appendChild(wrap);
+    card.appendChild(headerRow);
+    card.appendChild(top);
+    card.appendChild(jetsTitle);
+    card.appendChild(chips);
+    card.appendChild(panel);
+
+    box.appendChild(card);
+  }
+}
+
+/* ---------- APPLY AUTO SPLIT ---------- */
+function applyAutoSplit(){
+  if (breakdowns.length) return applyAutoSplitBreakdowns();
+  return applyAutoSplitSimple();
+}
+
+/* ---------- VALIDATION ---------- */
+function validate(){
+  // breakdown mode
+  if (breakdowns.length){
+    for (const b of breakdowns){
+      if (!String(b.name || '').trim()){
+        setWarn('Each breakdown needs a name.');
+        return false;
+      }
+      const jets = breakdownSelectedJets(b);
+      if (!jets.length){
+        setWarn(`Breakdown "${b.name}" must include at least one jet.`);
+        return false;
+      }
+      for (const j of jets){
+        if (!Number.isFinite(n(b.jets?.[j]?.target))){
+          setWarn(`Invalid target on breakdown "${b.name}" for ${j}.`);
+          return false;
+        }
+      }
+    }
+    setWarn('');
+    return true;
   }
 
-  ensureModeVisibility();
+  // simple mode
+  const jets = selectedDefaultJets();
+  if (!jets.length){ setWarn('Select at least one default jet.'); return false; }
+  for (const j of jets){
+    const inp = document.querySelector(`#jetsBox .jetTarget[data-jet="${j}"]`);
+    if (!Number.isFinite(n(inp?.value))){
+      setWarn(`Invalid target for ${j}.`);
+      return false;
+    }
+  }
+  setWarn('');
+  return true;
 }
 
-/* ---------- Existing current values for breakdown jets ---------- */
-function findExistingBreakdownJetCurrent(editing, bdId, jetName){
-  if (!editing?.breakdowns?.length) return null;
-  const b = editing.breakdowns.find(x => x.id === bdId);
-  if (!b) return null;
-  const j = b.jets?.[jetName];
-  if (!j) return null;
-  return n(j.current);
-}
-
-/* ---------- Main init ---------- */
-(async function init(){
-  const qs = getQS();
-  const mode = qs.mode || 'create';
-  const editingId = qs.id || null;
+/* ---------- BOOT ---------- */
+async function boot(){
+  const mode = qs('mode');
+  const editId = qs('id');
 
   const title = document.getElementById('title');
+  const subtitle = document.getElementById('subtitle');
   const saveBtn = document.getElementById('saveBtn');
-
-  let editing = null;
-  if (mode === 'edit' && editingId){
-    const all = await loadAll();
-    editing = upgradeTrackerSchema(all[editingId]);
-  }
-
-  if (editing){
-    title.textContent = 'Edit Run Tracker';
-    saveBtn.textContent = 'Save changes';
-    document.getElementById('name').value = editing.name || '';
-    document.getElementById('totalTarget').value = editing.totalTarget || '';
-  }else{
-    title.textContent = 'Create Run Tracker';
-    saveBtn.textContent = 'Create tracker';
-  }
-
-  // Checklist items
-  const checklistSelect = document.getElementById('checklistSelect');
   const authBtn = document.getElementById('authBtn');
 
-  const ok = await isAuthorized();
-  authBtn.style.display = ok ? 'none' : 'inline-block';
-  authBtn.onclick = async () => {
-    await authorize();
-    window.location.reload();
-  };
+  const authed = await isAuthorized();
+  authBtn.style.display = authed ? 'none' : 'inline-block';
+  authBtn.onclick = async () => { await authorize(); await boot(); };
 
-  let items = [];
-  if (await isAuthorized()){
-    items = await fetchChecklistItemsFlat();
+  const all = await loadAll();
+  let editing = null;
+
+  // checklist dropdown
+  const checklistSelect = document.getElementById('checklist');
+  checklistSelect.innerHTML = '<option value="">— Not linked —</option>';
+  const items = await fetchChecklistItemsFlat();
+  if (!items.length && !authed){
+    setWarn('Checklist items not loaded. Click “Authorize (fix checklist)”.');
+  }
+  if (items.length){
+    let currentGroup = null;
+    let currentName = null;
     for (const it of items){
+      if (it.checklistName !== currentName){
+        currentName = it.checklistName;
+        currentGroup = document.createElement('optgroup');
+        currentGroup.label = it.checklistName;
+        checklistSelect.appendChild(currentGroup);
+      }
       const opt = document.createElement('option');
       opt.value = it.id;
       opt.textContent = it.name;
-      checklistSelect.appendChild(opt);
+      currentGroup.appendChild(opt);
     }
   }
 
-  if (editing?.checklistItemId){
-    checklistSelect.value = editing.checklistItemId;
-  }
+  // Default jets
+  const guessed = await guessJetsFromMachineField();
+  const defaultJets = (guessed && guessed.length) ? guessed : [...JETS];
 
-  // Default jets (auto-select can be handled by your existing custom-field logic)
-  defaultJets = new Set(Object.keys(editing?.jets || {}).length ? Object.keys(editing.jets) : ALL_JETS);
-  renderDefaultJetChips();
-  renderSimpleTargets(editing?.jets || null);
-
-  // Breakdown init
   breakdowns = [];
-  if (editing?.breakdowns?.length){
-    for (const b of editing.breakdowns){
-      addBreakdown(b);
-    }
-  }
-  renderBreakdowns();
 
-  document.getElementById('applyAuto').onclick = () => applyAutoSplitToSimpleTargets();
+  // Edit mode
+  if (mode === 'edit' && editId && all[editId]){
+    editing = upgradeTrackerSchema(all[editId]);
+    title.textContent = 'Edit Run Tracker';
+    subtitle.textContent = 'Targets, jets, optional link, and Run Breakdown.';
+    saveBtn.textContent = 'Save changes';
+
+    document.getElementById('name').value = editing.name || '';
+    document.getElementById('totalTarget').value = (editing.totalTarget ? editing.totalTarget : '');
+
+    // Default jets for simple mode, or if user switches back
+    const selected = Object.keys(editing.jets || {}).length ? Object.keys(editing.jets) : defaultJets;
+    buildJetToggles(selected);
+
+    if (editing.checklistItemId) checklistSelect.value = editing.checklistItemId;
+
+    if (editing.breakdowns && editing.breakdowns.length){
+      breakdowns = editing.breakdowns.map(b => ({
+        id: b.id || uidBd(),
+        name: b.name || '',
+        totalTarget: b.totalTarget ?? 0,
+        jets: b.jets || {}
+      }));
+      renderBreakdowns();
+    } else {
+      renderSimpleJetTargets(editing.jets || {});
+    }
+  } else {
+    // Create mode
+    buildJetToggles(defaultJets);
+    renderSimpleJetTargets(null);
+  }
+
+  ensureModeVisibility();
+
+  document.getElementById('applyAuto').onclick = () => { applyAutoSplit(); t.sizeTo(document.body); };
 
   document.getElementById('addBreakdownBtn').onclick = () => {
-    addBreakdown(null);
-    ensureModeVisibility();
+    addBreakdown();
     renderBreakdowns();
+    ensureModeVisibility();
+    t.sizeTo(document.body);
   };
 
   document.getElementById('clearBreakdownsBtn').onclick = () => {
     breakdowns = [];
+    renderSimpleJetTargets(editing?.jets || null);
     ensureModeVisibility();
-    renderBreakdowns();
+    t.sizeTo(document.body);
   };
-
-  function validate(){
-    setWarn('');
-    // In breakdown mode, ensure each breakdown has at least one jet (already enforced)
-    return true;
-  }
 
   saveBtn.onclick = async () => {
     if (!validate()) return;
@@ -438,7 +562,9 @@ function findExistingBreakdownJetCurrent(editing, bdId, jetName){
 
     const totalTargetRaw = document.getElementById('totalTarget').value;
     const totalTarget = totalTargetRaw === '' ? 0 : round3(totalTargetRaw);
-    const autoSplit = editing ? (editing.autoSplit ?? false) : false;
+
+    // autoSplit flag stays for compatibility; dropdown removed so we preserve old value on edit
+    const autoSplit = editing ? !!editing.autoSplit : true;
 
     let jets = {};
     let finalBreakdowns = [];
@@ -452,17 +578,19 @@ function findExistingBreakdownJetCurrent(editing, bdId, jetName){
         }
         return {
           id: b.id || uidBd(),
-          name: b.name || '',
+          name: String(b.name || '').trim(),
           totalTarget: round3(b.totalTarget),
           jets: outJets
         };
       });
-    }else{
+      jets = {};
+    } else {
       jets = readSimpleJets(editing?.jets || null);
+      finalBreakdowns = [];
     }
 
-    const tracker = {
-      id: (editing?.id || uid()),
+    const payload = upgradeTrackerSchema({
+      ...(editing || {}),
       name,
       checklistItemId,
       checklistItemName,
@@ -471,18 +599,34 @@ function findExistingBreakdownJetCurrent(editing, bdId, jetName){
       collapsed: editing?.collapsed ?? false,
       jets,
       breakdowns: finalBreakdowns
-    };
+    });
 
-    const all = await loadAll();
-    if (editingId){
-      all[editingId] = tracker;
-    }else{
-      all[tracker.id] = tracker;
+    if (editing){
+      all[editId] = payload;
+      await saveAll(all);
+      return t.closeModal();
     }
-    await saveAll(all);
 
-    t.closeModal();
+    const id = uid();
+    all[id] = payload;
+    await saveAll(all);
+    return t.closeModal();
   };
 
   t.sizeTo(document.body);
-})();
+}
+
+function findExistingBreakdownJetCurrent(editing, breakdownId, jetName){
+  try{
+    if (!editing?.breakdowns?.length) return null;
+    const b = editing.breakdowns.find(x => x.id === breakdownId);
+    if (!b) return null;
+    const j = b.jets?.[jetName];
+    if (!j) return null;
+    return round3(j.current);
+  }catch{
+    return null;
+  }
+}
+
+t.render(() => boot());
