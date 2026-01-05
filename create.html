@@ -155,6 +155,7 @@
       font-weight:900;
       font-size:13px;
       display:none;
+      white-space:pre-wrap;
     }
 
     .stickyBar{
@@ -314,19 +315,25 @@
         <div class="warn" id="warn"></div>
       </div>
 
-      <div class="card" id="defaultJetsCard">
-        <label id="defaultJetsLabel">Default jets (used for “no breakdown” mode + new breakdowns)</label>
-        <div class="chips" id="jetToggles"></div>
+      <!-- Right side stays visible always.
+           We hide ONLY the "Default jets" section when breakdowns exist. -->
+      <div class="card" id="rightCard">
 
-        <div id="simpleTargetsWrap">
-          <div class="sectionTitle">Per-jet targets (no breakdown)</div>
-          <div class="panel" id="jetsBox"></div>
+        <div id="defaultJetsSection">
+          <label id="defaultJetsLabel">Default jets (used for “no breakdown” mode + new breakdowns)</label>
+          <div class="chips" id="jetToggles"></div>
+
+          <div id="simpleTargetsWrap">
+            <div class="sectionTitle">Per-jet targets (no breakdown)</div>
+            <div class="panel" id="jetsBox"></div>
+          </div>
         </div>
 
         <div id="breakdownsWrap" style="display:none;">
           <div class="sectionTitle">Breakdowns (each has its own jets)</div>
           <div id="breakdownsBox"></div>
         </div>
+
       </div>
     </div>
 

@@ -33,8 +33,7 @@ function upgradeTrackerSchema(tr){
   return {
     ...tr,
     totalTarget: tr.totalTarget ?? 0,
-    // autoSplit is persisted for backwards compatibility even though UI toggle is removed
-    autoSplit: tr.autoSplit ?? false,
+    autoSplit: tr.autoSplit ?? false, // preserved for compatibility
     collapsed: tr.collapsed ?? false,
     jets: tr.jets || {},
     breakdowns,
@@ -46,7 +45,9 @@ function upgradeTrackerSchema(tr){
 async function isAuthorized(){
   try{ return await t.getRestApi().isAuthorized(); } catch{ return false; }
 }
+
 async function authorize(){
+  // IMPORTANT: Trello’s auth flow can reject if popup blocked or context is wrong.
   return t.authorize({
     scope: { read: true, write: false },
     expiration: "never",
@@ -55,7 +56,6 @@ async function authorize(){
 }
 
 async function fetchChecklistItemsFlat(){
-  // REST path (best)
   try{
     const rest = t.getRestApi();
     const ok = await rest.isAuthorized();
@@ -78,7 +78,6 @@ async function fetchChecklistItemsFlat(){
     }
   }catch{ /* ignore */ }
 
-  // Fallback path (no auth)
   try{
     const card = await t.card('checklists');
     const lists = card?.checklists || [];
@@ -150,6 +149,7 @@ async function guessJetsFromMachineField(){
 function buildJetToggles(selected){
   const wrap = document.getElementById('jetToggles');
   wrap.innerHTML = '';
+
   for (const jet of JETS){
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -161,7 +161,6 @@ function buildJetToggles(selected){
     btn.addEventListener('click', () => {
       btn.dataset.on = (btn.dataset.on === 'true') ? 'false' : 'true';
       renderSimpleJetTargets();
-      // if there are breakdowns, new breakdown default jets come from current selectedDefaultJets()
       t.sizeTo(document.body);
     });
 
@@ -204,7 +203,6 @@ function renderSimpleJetTargets(existingJets = null){
     input.step = 'any';
     input.inputMode = 'decimal';
     input.dataset.jet = jet;
-
     if (existingJets?.[jet]?.target != null) input.value = existingJets[jet].target;
 
     line.appendChild(left);
@@ -240,24 +238,24 @@ function readSimpleJets(existingJets){
   return jets;
 }
 
-/* ---------- BREAKDOWNS MODE (each has its own jets) ---------- */
+/* ---------- BREAKDOWNS MODE ---------- */
 let breakdowns = [];
 
 function ensureModeVisibility(){
   const has = breakdowns.length > 0;
 
-  // show correct wrapper
-  document.getElementById('simpleTargetsWrap').style.display = has ? 'none' : 'block';
-  document.getElementById('breakdownsWrap').style.display = has ? 'block' : 'none';
+  // ✅ show breakdown editor when breakdowns exist
+  const bdWrap = document.getElementById('breakdownsWrap');
+  bdWrap.style.display = has ? 'block' : 'none';
 
-  // ✅ your request: hide "Default jets..." entirely if there is a breakdown
-  const dj = document.getElementById('defaultJetsCard');
-  if (dj) dj.style.display = has ? 'none' : 'block';
+  // ✅ hide ONLY the default jets section (your request), not the whole card
+  const djSection = document.getElementById('defaultJetsSection');
+  djSection.style.display = has ? 'none' : 'block';
 }
 
 function addBreakdown(prefill = null){
   const defaults = selectedDefaultJets();
-  const initialJets = (prefill?.jets && Object.keys(prefill.jets).length)
+  const seedJets = (prefill?.jets && Object.keys(prefill.jets).length)
     ? prefill.jets
     : Object.fromEntries((defaults.length ? defaults : ["Waterjet 1"]).map(j => [j, { current: 0, target: 0 }]));
 
@@ -265,7 +263,7 @@ function addBreakdown(prefill = null){
     id: prefill?.id || uidBd(),
     name: prefill?.name || '',
     totalTarget: prefill?.totalTarget ?? 0,
-    jets: initialJets
+    jets: seedJets
   });
 }
 
@@ -470,10 +468,18 @@ async function boot(){
   const saveBtn = document.getElementById('saveBtn');
   const authBtn = document.getElementById('authBtn');
 
-  // auth
+  // auth button (with visible errors)
   const authed = await isAuthorized();
   authBtn.style.display = authed ? 'none' : 'inline-block';
-  authBtn.onclick = async () => { await authorize(); await boot(); };
+  authBtn.onclick = async () => {
+    try{
+      setWarn('');
+      await authorize();
+      await boot(); // reload UI + checklist
+    }catch(err){
+      setWarn(`Authorize failed.\nIf you have a popup blocker, allow popups for Trello.\n\nDetails: ${err?.message || String(err)}`);
+    }
+  };
 
   const all = await loadAll();
   let editing = null;
@@ -504,7 +510,7 @@ async function boot(){
     }
   }
 
-  // Default jets start state (Machine(s) auto-select)
+  // default jets initial state
   const guessed = await guessJetsFromMachineField();
   const defaultJets = (guessed && guessed.length) ? guessed : [...JETS];
 
@@ -572,7 +578,6 @@ async function boot(){
     const totalTargetRaw = document.getElementById('totalTarget').value;
     const totalTarget = totalTargetRaw === '' ? 0 : round3(totalTargetRaw);
 
-    // autoSplit UI removed: keep existing value on edit, default true on create
     const autoSplit = editing ? !!editing.autoSplit : true;
 
     let jets = {};
