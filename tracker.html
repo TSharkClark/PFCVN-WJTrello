@@ -28,18 +28,37 @@
 
     body{
       margin:0;
-      padding:12px;
+      padding:0;
       background:var(--bg);
       color:var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
+    /* compact header INSIDE iframe (closest possible to Trello gray header placement) */
     .topbar{
       display:flex;
       align-items:center;
-      justify-content:flex-end;
+      justify-content:space-between;
       gap:10px;
-      margin-bottom:12px;
+      padding:8px 10px;
+      border-bottom:1px solid #e0e0e0;
+      background:#f6f6f6;
+      position:sticky;
+      top:0;
+      z-index:5;
+    }
+    .topTitle{
+      font-weight:950;
+      font-size:13px;
+      color:#222;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+    }
+    .dot{
+      width:8px;height:8px;border-radius:999px;background:var(--good);
+      box-shadow:0 0 0 3px rgba(30,155,75,.12);
     }
 
     .primaryBtn{
@@ -47,33 +66,40 @@
       background:var(--primary-bg);
       color:var(--primary-text);
       border-radius:12px;
-      padding:10px 12px;
+      padding:8px 10px;
       font-weight:950;
       cursor:pointer;
       user-select:none;
       white-space:nowrap;
+      font-size:13px;
     }
     .primaryBtn:hover{
       border-color:var(--primary-hover);
       background:var(--primary-hover);
     }
 
+    #container{
+      padding:10px;
+      padding-top:8px;
+    }
+
     .empty{
-      padding:14px;
+      padding:12px;
       border:1px dashed var(--border);
       border-radius:12px;
       background:var(--soft);
       color:var(--muted);
       font-weight:900;
+      font-size:13px;
     }
 
     .tracker{
       border:1px solid var(--border);
       border-radius:14px;
-      padding:12px;
+      padding:10px;
       background:#fff;
       box-shadow: 0 1px 0 rgba(0,0,0,0.04);
-      margin-bottom:12px;
+      margin-bottom:10px;
     }
 
     .head{
@@ -81,16 +107,16 @@
       justify-content:space-between;
       gap:10px;
       align-items:flex-start;
-      margin-bottom:10px;
+      margin-bottom:8px;
     }
 
     .title{
-      font-size:16px;
+      font-size:14px;
       font-weight:950;
       line-height:1.15;
     }
     .sub{
-      margin-top:5px;
+      margin-top:4px;
       color:var(--muted);
       font-size:12px;
       font-weight:800;
@@ -98,7 +124,7 @@
 
     .actions{
       display:flex;
-      gap:8px;
+      gap:6px;
       flex-wrap:wrap;
       justify-content:flex-end;
     }
@@ -108,10 +134,11 @@
       background:var(--btn-bg);
       color:var(--btn-text);
       border-radius:10px;
-      padding:8px 12px;
+      padding:7px 10px;
       font-weight:950;
       cursor:pointer;
       user-select:none;
+      font-size:12px;
     }
     .btn:hover{
       border-color:var(--btn-hover);
@@ -128,12 +155,71 @@
       color:var(--danger);
     }
 
+    /* focus bar */
+    .focusBar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin:6px 0 8px 0;
+      flex-wrap:wrap;
+    }
+    .focusLeft{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .focusLabel{
+      font-size:12px;
+      font-weight:950;
+      color:var(--muted);
+      margin-right:4px;
+    }
+    .chip{
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--btn-text);
+      border-radius:999px;
+      padding:6px 10px;
+      font-weight:950;
+      cursor:pointer;
+      user-select:none;
+      font-size:12px;
+      line-height:1;
+    }
+    .chip:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
+    .chip.on{
+      background:rgba(30,155,75,.12);
+      border-color:rgba(30,155,75,.5);
+      color:#0a6f2d;
+    }
+
+    .iconBtn{
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:10px;
+      padding:6px 8px;
+      font-weight:950;
+      cursor:pointer;
+      user-select:none;
+      font-size:12px;
+      line-height:1;
+    }
+    .iconBtn:hover{
+      border-color:var(--btn-hover);
+      color:var(--btn-hover);
+    }
+
     .totalBox{
       border:1px solid var(--border);
       border-radius:12px;
-      padding:10px;
+      padding:8px 10px;
       background:var(--soft);
-      margin-bottom:10px;
+      margin-bottom:8px;
     }
     .totalTop{
       display:flex;
@@ -141,6 +227,7 @@
       align-items:center;
       gap:10px;
       font-weight:950;
+      font-size:12px;
     }
 
     .pill{
@@ -151,28 +238,30 @@
       border:1px solid var(--border);
       background:#fff;
       display:inline-block;
-      margin-top:8px;
+      margin-top:6px;
     }
     .pillOver{ border-color:#ffb3be; color:var(--danger); }
     .pillUnder{ border-color:#bfe9c6; color:var(--good); }
 
     .barWrap{
-      height:10px;
+      height:9px;
       border-radius:999px;
       background:#eaeaea;
       overflow:hidden;
       border:1px solid #d2d2d2;
-      margin-top:8px;
+      margin-top:6px;
     }
     .barFill{ height:100%; width:0%; background:#111; }
     .barOver{ border-color:#ffb3be; }
     .barOver .barFill{ background:var(--danger); }
 
     .sectionTitle{
-      margin:10px 0 6px;
+      margin:8px 0 6px;
       font-weight:950;
-      font-size:13px;
+      font-size:12px;
       color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.4px;
     }
 
     .breakdown{
@@ -188,12 +277,12 @@
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      margin-bottom:8px;
+      margin-bottom:6px;
     }
 
     .bdName{
       font-weight:950;
-      font-size:14px;
+      font-size:13px;
       line-height:1.1;
     }
 
@@ -202,18 +291,21 @@
       color:var(--muted);
       font-size:12px;
       white-space:nowrap;
+      display:flex;
+      align-items:center;
+      gap:8px;
     }
 
     .jets{
       display:flex;
       flex-direction:column;
-      gap:10px;
+      gap:8px;
     }
 
     .jetRow{
       border:1px solid var(--border);
       border-radius:12px;
-      padding:10px;
+      padding:8px 10px;
       background:#fff;
     }
 
@@ -222,12 +314,12 @@
       justify-content:space-between;
       align-items:center;
       gap:10px;
-      margin-bottom:8px;
+      margin-bottom:6px;
     }
 
     .jetName{
       font-weight:950;
-      font-size:14px;
+      font-size:13px;
       white-space:nowrap;
     }
 
@@ -243,20 +335,20 @@
     .controls{
       display:flex;
       align-items:center;
-      gap:10px;
+      gap:8px;
       justify-content:space-between;
-      margin-top:8px;
+      margin-top:6px;
     }
 
     .pm{
-      width:46px;
-      height:46px;
+      width:40px;
+      height:40px;
       border-radius:12px;
       border:1px solid var(--border);
       background:var(--btn-bg);
       color:var(--btn-text);
       font-weight:950;
-      font-size:22px;
+      font-size:20px;
       cursor:pointer;
       display:flex;
       align-items:center;
@@ -274,24 +366,25 @@
 
     .num{
       flex:1;
-      height:46px;
+      height:40px;
       border:1px solid var(--border);
       border-radius:12px;
-      padding:0 12px;
-      font-size:18px;
+      padding:0 10px;
+      font-size:16px;
       font-weight:950;
       text-align:center;
-      min-width:120px;
+      min-width:96px;
       color:var(--text);
       background:#fff;
     }
 
     .max{
-      min-width:120px;
+      min-width:110px;
       text-align:right;
       color:var(--muted);
       font-weight:950;
       white-space:nowrap;
+      font-size:12px;
     }
 
     .collapsedNote{
@@ -309,6 +402,7 @@
 
 <body>
   <div class="topbar">
+    <div class="topTitle"><span class="dot"></span> Waterjet Run Tracker</div>
     <button class="primaryBtn" id="addTrackerBtn">+ Add Tracker</button>
   </div>
 

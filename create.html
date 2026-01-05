@@ -25,7 +25,6 @@
       --danger:#b00020;
     }
 
-    /* ✅ scrolling works in Trello modal iframe */
     html, body{
       height:100%;
       overflow:auto;
@@ -158,7 +157,6 @@
       display:none;
     }
 
-    /* ✅ Sticky footer that doesn't kill scrolling */
     .stickyBar{
       position: sticky;
       bottom: 0;
@@ -300,13 +298,6 @@
             <label>Total target (optional)</label>
             <input id="totalTarget" type="number" step="any" value="" placeholder="Leave blank to use sum of targets" />
           </div>
-          <div>
-            <label>Auto-split targets</label>
-            <select id="autoSplit">
-              <option value="on" selected>On (split from total)</option>
-              <option value="off">Off</option>
-            </select>
-          </div>
         </div>
 
         <div class="row" style="margin-top:12px;">
@@ -314,9 +305,6 @@
         </div>
 
         <div class="sectionTitle">Run Breakdown (optional)</div>
-        <div class="muted" style="margin:6px 0 0 0;">
-          Use this when one item has multiple files/variants and you want per-jet counters for each.
-        </div>
 
         <div class="row" style="margin-top:10px;">
           <button class="btn" id="addBreakdownBtn" type="button">+ Add Breakdown</button>
@@ -326,8 +314,8 @@
         <div class="warn" id="warn"></div>
       </div>
 
-      <div class="card">
-        <label>Default jets (used for “no breakdown” mode + new breakdowns)</label>
+      <div class="card" id="defaultJetsCard">
+        <label id="defaultJetsLabel">Default jets (used for “no breakdown” mode + new breakdowns)</label>
         <div class="chips" id="jetToggles"></div>
 
         <div id="simpleTargetsWrap">
