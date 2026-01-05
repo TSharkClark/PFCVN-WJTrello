@@ -91,7 +91,7 @@ async function fetchChecklistItemsFlat(){
         out.push({ id, name, checklistName: clName });
       }
     }
-    out.sort((a,b) => a.checklistName.localeCompare(b.checklistNameittName || b.name.localeCompare(b.name));
+    out.sort((a,b) => a.checklistName.localeCompare(b.checklistName) || a.name.localeCompare(b.name));
     return out;
   }catch{
     return [];
@@ -167,6 +167,10 @@ function selectedDefaultJets(){
     .map(b => b.dataset.jet);
 }
 
+function isAutoSplitOn(){
+  return document.getElementById('autoSplit').value === 'on';
+}
+
 /* ---------- SIMPLE MODE TARGETS ---------- */
 function renderSimpleJetTargets(existingJets = null){
   const box = document.getElementById('jetsBox');
@@ -238,10 +242,6 @@ function ensureModeVisibility(){
   const has = breakdowns.length > 0;
   document.getElementById('simpleTargetsWrap').style.display = has ? 'none' : 'block';
   document.getElementById('breakdownsWrap').style.display = has ? 'block' : 'none';
-
-  // ✅ Hide the entire "Default jets..." card when breakdowns exist (per your request)
-  const dj = document.getElementById('defaultJetsCard');
-  if (dj) dj.style.display = has ? 'none' : 'block';
 }
 
 function addBreakdown(prefill = null){
@@ -508,6 +508,7 @@ async function boot(){
 
     document.getElementById('name').value = editing.name || '';
     document.getElementById('totalTarget').value = (editing.totalTarget ? editing.totalTarget : '');
+    document.getElementById('autoSplit').value = editing.autoSplit ? 'on' : 'off';
 
     // Default jets for simple mode, or if user switches back
     const selected = Object.keys(editing.jets || {}).length ? Object.keys(editing.jets) : defaultJets;
@@ -562,9 +563,7 @@ async function boot(){
 
     const totalTargetRaw = document.getElementById('totalTarget').value;
     const totalTarget = totalTargetRaw === '' ? 0 : round3(totalTargetRaw);
-
-    // autoSplit flag stays for compatibility; dropdown removed so we preserve old value on edit
-    const autoSplit = editing ? !!editing.autoSplit : true;
+    const autoSplit = isAutoSplitOn();
 
     let jets = {};
     let finalBreakdowns = [];
@@ -583,7 +582,7 @@ async function boot(){
           jets: outJets
         };
       });
-      jets = {};
+      jets = {}; // not used in breakdown mode (UI shows aggregated summary instead)
     } else {
       jets = readSimpleJets(editing?.jets || null);
       finalBreakdowns = [];

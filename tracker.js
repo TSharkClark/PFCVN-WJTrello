@@ -100,6 +100,18 @@ function sumJets(jets){
   return { current, target };
 }
 
+function aggregateByJet(breakdowns){
+  const out = {};
+  for (const b of (breakdowns || [])){
+    for (const [jetName, jet] of Object.entries(b.jets || {})){
+      if (!out[jetName]) out[jetName] = { current: 0, target: 0 };
+      out[jetName].current += n(jet.current);
+      out[jetName].target += n(jet.target);
+    }
+  }
+  return out;
+}
+
 function computeTotals(tr){
   if (tr.breakdowns && tr.breakdowns.length){
     let totalCurrent = 0;
@@ -152,33 +164,6 @@ async function mutateTracker(id, mutateFn){
   trackers[id] = mutateFn(trackers[id]);
   await saveTrackers(trackers);
   await render();
-}
-
-/* ---------- UI state (per user/browser) ---------- */
-function cardKey(){
-  try{
-    const ctx = t.getContext && t.getContext();
-    return (ctx && ctx.card) ? ctx.card : 'card';
-  }catch{ return 'card'; }
-}
-function lsKey(trackerId, suffix){
-  return `wjrt:${cardKey()}:${trackerId}:${suffix}`;
-}
-function getFocus(trackerId){
-  try{ return localStorage.getItem(lsKey(trackerId,'focus')) || 'ALL'; }catch{ return 'ALL'; }
-}
-function setFocus(trackerId, val){
-  try{ localStorage.setItem(lsKey(trackerId,'focus'), val); }catch{}
-}
-function isBdCollapsed(trackerId, bdId){
-  try{ return localStorage.getItem(lsKey(trackerId,`bd:${bdId}:c`)) === '1'; }catch{ return false; }
-}
-function toggleBdCollapsed(trackerId, bdId){
-  try{
-    const k = lsKey(trackerId,`bd:${bdId}:c`);
-    const cur = localStorage.getItem(k) === '1';
-    localStorage.setItem(k, cur ? '0' : '1');
-  }catch{}
 }
 
 async function render(){
@@ -271,21 +256,36 @@ async function render(){
       continue;
     }
 
-    /* Focus controls: show only one machine’s counters */
-    const focus = getFocus(id);
-    const focusBar = el('div',{class:'focusBar'},[
-      el('div',{class:'focusLeft'},[
-        el('div',{class:'focusLabel',text:'Focus:'}),
-        el('button',{type:'button',class:`chip ${focus==='ALL'?'on':''}`,text:'All',onclick:()=>{ setFocus(id,'ALL'); render(); }}),
-        el('button',{type:'button',class:`chip ${focus==='Waterjet 1'?'on':''}`,text:'WJ1',onclick:()=>{ setFocus(id,'Waterjet 1'); render(); }}),
-        el('button',{type:'button',class:`chip ${focus==='Waterjet 2'?'on':''}`,text:'WJ2',onclick:()=>{ setFocus(id,'Waterjet 2'); render(); }}),
-        el('button',{type:'button',class:`chip ${focus==='Waterjet 3'?'on':''}`,text:'WJ3',onclick:()=>{ setFocus(id,'Waterjet 3'); render(); }})
-      ])
-    ]);
-    card.appendChild(focusBar);
-
-    // ✅ BREAKDOWN MODE: NO "Overall by Jet" (per your request). Show only breakdown blocks.
+    // ✅ BREAKDOWN MODE: show aggregate by jet, then breakdown blocks with controls
     if (tracker.breakdowns && tracker.breakdowns.length){
+      const agg = aggregateByJet(tracker.breakdowns);
+
+      card.appendChild(el('div',{class:'sectionTitle',text:'Overall by Jet'}));
+
+      const jetsWrap = el('div',{class:'jets'});
+      for (const [jetName, jet] of Object.entries(agg)){
+        const st = statusFor(jet.current, jet.target);
+
+        const row = el('div',{class:'jetRow'});
+        row.appendChild(el('div',{class:'jetHeader'},[
+          el('div',{class:'jetName',text:jetName}),
+          el('div',{class:`status ${st.cls}`,text:st.text})
+        ]));
+
+        const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
+        const barFill = el('div',{class:'barFill'});
+        barFill.style.width = (pct(jet.current, jet.target)*100).toFixed(0)+'%';
+        barWrap.appendChild(barFill);
+        row.appendChild(barWrap);
+
+        row.appendChild(el('div',{class:'controls'},[
+          el('div',{class:'max',text:`${fmt(jet.current)} / ${fmt(jet.target)} target`})
+        ]));
+
+        jetsWrap.appendChild(row);
+      }
+      card.appendChild(jetsWrap);
+
       card.appendChild(el('div',{class:'sectionTitle',text:'Run Breakdown'}));
 
       for (const bd of tracker.breakdowns){
@@ -294,20 +294,11 @@ async function render(){
         const bdTarget = n(bd.totalTarget) || s.target;
         const bdDiff = s.current - bdTarget;
 
-        const collapsed = isBdCollapsed(id, bd.id);
-
         const bdBox = el('div',{class:'breakdown'});
+
         bdBox.appendChild(el('div',{class:'breakdownHeader'},[
           el('div',{class:'bdName',text: bd.name || 'Breakdown'}),
-          el('div',{class:'bdMeta'},[
-            el('span',{text:`${fmt(s.current)} / ${fmt(bdTarget)}`}),
-            el('button',{
-              type:'button',
-              class:'iconBtn',
-              text: collapsed ? '▸' : '▾',
-              onclick:()=>{ toggleBdCollapsed(id, bd.id); render(); }
-            })
-          ])
+          el('div',{class:'bdMeta',text:`${fmt(s.current)} / ${fmt(bdTarget)}`})
         ]));
 
         const bdBarWrap = el('div',{class:`barWrap ${bdDiff>0?'barOver':''}`});
@@ -316,63 +307,57 @@ async function render(){
         bdBarWrap.appendChild(bdBarFill);
         bdBox.appendChild(bdBarWrap);
 
-        if (!collapsed){
-          const innerJets = el('div',{class:'jets'});
+        const innerJets = el('div',{class:'jets'});
+        for (const [jetName, data] of Object.entries(bdJets)){
+          const currentVal = n(data.current);
+          const targetVal = n(data.target);
+          const st = statusFor(currentVal, targetVal);
 
-          for (const [jetName, data] of Object.entries(bdJets)){
-            if (focus !== 'ALL' && jetName !== focus) continue;
+          const row = el('div',{class:'jetRow'});
 
-            const currentVal = n(data.current);
-            const targetVal = n(data.target);
-            const st = statusFor(currentVal, targetVal);
+          row.appendChild(el('div',{class:'jetHeader'},[
+            el('div',{class:'jetName',text:jetName}),
+            el('div',{class:`status ${st.cls}`,text:st.text})
+          ]));
 
-            const row = el('div',{class:'jetRow'});
+          const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
+          const barFill = el('div',{class:'barFill'});
+          barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
+          barWrap.appendChild(barFill);
+          row.appendChild(barWrap);
 
-            row.appendChild(el('div',{class:'jetHeader'},[
-              el('div',{class:'jetName',text:jetName}),
-              el('div',{class:`status ${st.cls}`,text:st.text})
-            ]));
+          const input = el('input',{
+            class:'num',
+            type:'number',
+            step:'any',
+            inputmode:'decimal',
+            value: fmt(currentVal)
+          });
 
-            const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
-            const barFill = el('div',{class:'barFill'});
-            barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
-            barWrap.appendChild(barFill);
-            row.appendChild(barWrap);
+          const applyValue = async (newVal) => {
+            const trackers2 = await loadUpgradedTrackers();
+            const tr = trackers2[id];
+            const b = (tr.breakdowns || []).find(x => x.id === bd.id);
+            if (!b?.jets?.[jetName]) return;
+            b.jets[jetName].current = round3(newVal);
+            await saveTrackers(trackers2);
+            await render();
+          };
 
-            const input = el('input',{
-              class:'num',
-              type:'number',
-              step:'any',
-              inputmode:'decimal',
-              value: fmt(currentVal)
-            });
+          const minus = el('button',{type:'button',class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
+          const plus  = el('button',{type:'button',class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
 
-            const applyValue = async (newVal) => {
-              const trackers2 = await loadUpgradedTrackers();
-              const tr = trackers2[id];
-              const b = (tr.breakdowns || []).find(x => x.id === bd.id);
-              if (!b?.jets?.[jetName]) return;
-              b.jets[jetName].current = round3(newVal);
-              await saveTrackers(trackers2);
-              await render();
-            };
+          input.addEventListener('change', e => applyValue(e.target.value));
 
-            const minus = el('button',{type:'button',class:'pm',text:'–',onclick:() => applyValue(currentVal - 1)});
-            const plus  = el('button',{type:'button',class:'pm',text:'+',onclick:() => applyValue(currentVal + 1)});
+          row.appendChild(el('div',{class:'controls'},[
+            minus, input, plus,
+            el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
+          ]));
 
-            input.addEventListener('change', e => applyValue(e.target.value));
-
-            row.appendChild(el('div',{class:'controls'},[
-              minus, input, plus,
-              el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
-            ]));
-
-            innerJets.appendChild(row);
-          }
-
-          bdBox.appendChild(innerJets);
+          innerJets.appendChild(row);
         }
 
+        bdBox.appendChild(innerJets);
         card.appendChild(bdBox);
       }
 
@@ -383,8 +368,6 @@ async function render(){
     // Classic mode (no breakdowns)
     const jetsWrap2 = el('div',{class:'jets'});
     for (const [jetName, data] of Object.entries(tracker.jets || {})){
-      if (focus !== 'ALL' && jetName !== focus) continue;
-
       const currentVal = n(data.current);
       const targetVal = n(data.target);
       const st = statusFor(currentVal, targetVal);
