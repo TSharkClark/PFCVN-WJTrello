@@ -2,9 +2,23 @@
 const t = TrelloPowerUp.iframe();
 const STORAGE_KEY = 'trackers';
 const JETS = ["Waterjet 1", "Waterjet 2", "Waterjet 3"];
+// Targets that come from auto-split are rounded to a shop-friendly step.
+// 0.1 means 6.68 / 3 becomes 2.2 each (effective total 6.6) to avoid "ghost under".
+const TARGET_STEP = 0.1;
 
 function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
 function round3(v){ return Math.round(n(v) * 1000) / 1000; }
+function roundStep(v, step){
+  const s = Number(step);
+  if (!Number.isFinite(s) || s <= 0) return round3(v);
+  const x = n(v);
+  return Math.round(x / s) * s;
+}
+function stripFloat(v){
+  // prevent 1.2000000000000002
+  const x = n(v);
+  return Number.isFinite(x) ? Number(x.toFixed(6)) : 0;
+}
 function uid(){ return 'trk_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
 function uidBd(){ return 'bd_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
 function qs(name){ try{ return new URL(window.location.href).searchParams.get(name); } catch{ return null; } }
@@ -47,12 +61,20 @@ async function isAuthorized(){
 }
 
 async function authorize(){
-  // IMPORTANT: Trello’s auth flow can reject if popup blocked or context is wrong.
-  return t.authorize({
+  // Prefer RestApi authorize (more reliable in Power-Up iframes),
+  // fall back to t.authorize if needed.
+  const opts = {
     scope: { read: true, write: false },
     expiration: "never",
     name: "Waterjet Run Tracker"
-  });
+  };
+
+  try{
+    const rest = t.getRestApi();
+    if (rest?.authorize) return await rest.authorize(opts);
+  }catch{ /* ignore */ }
+
+  return await t.authorize(opts);
 }
 
 async function fetchChecklistItemsFlat(){
@@ -161,6 +183,8 @@ function buildJetToggles(selected){
     btn.addEventListener('click', () => {
       btn.dataset.on = (btn.dataset.on === 'true') ? 'false' : 'true';
       renderSimpleJetTargets();
+      // Live auto-split when a total is typed.
+      if (!breakdowns.length) maybeAutoSplitSimpleFromTotal();
       t.sizeTo(document.body);
     });
 
@@ -211,6 +235,13 @@ function renderSimpleJetTargets(existingJets = null){
   }
 }
 
+function splitTotalAcrossJets(total, jetCount){
+  const count = Math.max(1, Number(jetCount) || 1);
+  const per = stripFloat(roundStep(total / count, TARGET_STEP));
+  const effectiveTotal = stripFloat(per * count);
+  return { per, effectiveTotal };
+}
+
 function applyAutoSplitSimple(){
   const jets = selectedDefaultJets();
   if (!jets.length){ setWarn('Select at least one default jet first.'); return; }
@@ -220,11 +251,24 @@ function applyAutoSplitSimple(){
   if (!Number.isFinite(total) || total <= 0){ setWarn('Enter a Total target above 0 for auto-split.'); return; }
 
   setWarn('');
-  const perJet = round3(total / jets.length);
+  const perJet = stripFloat(roundStep(total / jets.length, TARGET_STEP));
 
   for (const inp of document.querySelectorAll('#jetsBox .jetTarget')){
     inp.value = perJet;
   }
+
+  // Normalize effective total to prevent "ghost remainder".
+  const effectiveTotal = stripFloat(perJet * jets.length);
+  document.getElementById('totalTarget').value = effectiveTotal;
+}
+
+function maybeAutoSplitSimpleFromTotal(){
+  // Live auto-split when the total changes (simple mode only)
+  if (breakdowns.length) return;
+  const totalRaw = document.getElementById('totalTarget')?.value;
+  if (totalRaw === '' || totalRaw == null) return;
+  const total = round3(totalRaw);
+  if (total > 0) applyAutoSplitSimple();
 }
 
 function readSimpleJets(existingJets){
@@ -285,21 +329,43 @@ function toggleBreakdownJet(bd, jetName){
   if (!Object.keys(bd.jets).length){
     bd.jets[jetName] = { current: 0, target: 0 };
   }
+
+  // Live auto-split when jets change and a total exists.
+  maybeAutoSplitBreakdown(bd);
+}
+
+function maybeAutoSplitBreakdown(bd){
+  if (!bd) return;
+  const jets = breakdownSelectedJets(bd);
+  const total = round3(bd.totalTarget);
+  if (!jets.length || !Number.isFinite(total) || total <= 0) return;
+  const { per, effectiveTotal } = splitTotalAcrossJets(total, jets.length);
+  for (const j of jets){
+    bd.jets[j].target = per;
+  }
+  // Normalize to effective total to avoid "ghost under".
+  bd.totalTarget = effectiveTotal;
+}
+
+function autoSplitOneBreakdown(bd){
+  const jets = breakdownSelectedJets(bd);
+  const total = round3(bd.totalTarget);
+  if (!jets.length || !total || total <= 0) return;
+
+  const per = stripFloat(roundStep(total / jets.length, TARGET_STEP));
+  for (const j of jets){
+    bd.jets[j].target = per;
+  }
+
+  // Normalize effective total so targets add up cleanly.
+  bd.totalTarget = stripFloat(per * jets.length);
 }
 
 function applyAutoSplitBreakdowns(){
   if (!breakdowns.length){ setWarn('Add at least one breakdown first.'); return; }
   setWarn('');
 
-  for (const bd of breakdowns){
-    const jets = breakdownSelectedJets(bd);
-    const total = round3(bd.totalTarget);
-    if (!total || total <= 0) continue;
-    const per = round3(total / jets.length);
-    for (const j of jets){
-      bd.jets[j].target = per;
-    }
-  }
+  for (const bd of breakdowns) autoSplitOneBreakdown(bd);
   renderBreakdowns();
 }
 
@@ -316,7 +382,7 @@ function renderBreakdowns(){
 
     const left = document.createElement('div');
     left.className = 'bdHeader';
-    left.textContent = 'Breakdown';
+    left.textContent = 'Advanced Count';
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -340,19 +406,25 @@ function renderBreakdowns(){
     nameLabel.textContent = 'Name';
     const nameInput = document.createElement('input');
     nameInput.value = bd.name || '';
-    nameInput.placeholder = 'Example: File A / Blue / Rev 2 / Lane 3';
+    nameInput.placeholder = '';
     nameInput.addEventListener('input', e => { bd.name = e.target.value; });
     nameWrap.appendChild(nameLabel);
     nameWrap.appendChild(nameInput);
 
     const tgtWrap = document.createElement('div');
     const tgtLabel = document.createElement('label');
-    tgtLabel.textContent = 'Breakdown total target';
+    tgtLabel.textContent = 'Total';
     const tgtInput = document.createElement('input');
     tgtInput.type = 'number';
     tgtInput.step = 'any';
     tgtInput.value = bd.totalTarget ?? 0;
-    tgtInput.addEventListener('input', e => { bd.totalTarget = round3(e.target.value); });
+    tgtInput.addEventListener('input', e => {
+      bd.totalTarget = round3(e.target.value);
+      autoSplitOneBreakdown(bd);
+      renderBreakdowns();
+      ensureModeVisibility();
+      t.sizeTo(document.body);
+    });
     tgtWrap.appendChild(tgtLabel);
     tgtWrap.appendChild(tgtInput);
 
@@ -374,6 +446,7 @@ function renderBreakdowns(){
       btn.dataset.on = bd.jets?.[j] ? 'true' : 'false';
       btn.addEventListener('click', () => {
         toggleBreakdownJet(bd, j);
+        autoSplitOneBreakdown(bd);
         renderBreakdowns();
         ensureModeVisibility();
         t.sizeTo(document.body);
@@ -468,16 +541,30 @@ async function boot(){
   const saveBtn = document.getElementById('saveBtn');
   const authBtn = document.getElementById('authBtn');
 
-  // auth button (with visible errors)
+  // auth button (reliable + visible state)
+  const setAuthBtnUi = ({ loading=false, error='' }={}) => {
+    authBtn.disabled = !!loading;
+    authBtn.textContent = loading ? 'Authorizing…' : 'Authorize';
+    if (error) setWarn(error);
+  };
+
   const authed = await isAuthorized();
   authBtn.style.display = authed ? 'none' : 'inline-block';
   authBtn.onclick = async () => {
     try{
       setWarn('');
+      setAuthBtnUi({ loading:true });
       await authorize();
-      await boot(); // reload UI + checklist
+      const ok = await isAuthorized();
+      if (!ok) throw new Error('Trello did not report authorization as complete.');
+      await boot();
     }catch(err){
-      setWarn(`Authorize failed.\nIf you have a popup blocker, allow popups for Trello.\n\nDetails: ${err?.message || String(err)}`);
+      setAuthBtnUi({
+        loading:false,
+        error: `Authorize failed or was blocked.\n\nIf a popup didn’t open, allow popups for Trello and try again.\n\nDetails: ${err?.message || String(err)}`
+      });
+    }finally{
+      setAuthBtnUi({ loading:false });
     }
   };
 
@@ -490,7 +577,7 @@ async function boot(){
 
   const items = await fetchChecklistItemsFlat();
   if (!items.length && !authed){
-    setWarn('Checklist items not loaded. Click “Authorize (fix checklist)”.');
+    setWarn('Checklist items not loaded. Click “Authorize”.');
   }
 
   if (items.length){
@@ -520,7 +607,7 @@ async function boot(){
     editing = upgradeTrackerSchema(all[editId]);
 
     title.textContent = 'Edit Run Tracker';
-    subtitle.textContent = 'Targets, jets, optional link, and Run Breakdown.';
+    subtitle.textContent = 'Targets, jets, checklist link, and Advanced Count.';
     saveBtn.textContent = 'Save changes';
 
     document.getElementById('name').value = editing.name || '';
@@ -548,6 +635,19 @@ async function boot(){
   }
 
   ensureModeVisibility();
+
+  // Live auto-split when typing total (simple mode).
+  const totalInp = document.getElementById('totalTarget');
+  if (totalInp) totalInp.oninput = () => { maybeAutoSplitSimpleFromTotal(); };
+
+  // Live simple-mode auto-split
+  const totalInput = document.getElementById('totalTarget');
+  if (totalInput){
+    totalInput.addEventListener('input', () => {
+      maybeAutoSplitSimpleFromTotal();
+      t.sizeTo(document.body);
+    });
+  }
 
   document.getElementById('applyAuto').onclick = () => { applyAutoSplit(); t.sizeTo(document.body); };
 

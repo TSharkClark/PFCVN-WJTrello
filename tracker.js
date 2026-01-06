@@ -129,6 +129,23 @@ function statusFor(currentVal, targetVal){
   return { text:'ON TARGET', cls:'', over:false };
 }
 
+function statusPillText(currentVal, targetVal){
+  const diff = n(currentVal) - n(targetVal);
+  if (diff > 0) return { text:`OVER +${fmt(diff)}`, cls:'pill pillOver' };
+  if (diff < 0) return { text:`REM ${fmt(Math.abs(diff))}`, cls:'pill pillUnder' };
+  return { text:'ON', cls:'pill pillUnder' };
+}
+
+function jetBadges(jetNames){
+  const jets = Array.isArray(jetNames) ? jetNames : Object.keys(jetNames || {});
+  const wrap = el('div',{class:'bdBadges'});
+  for (const j of jets){
+    const short = j.includes('1') ? 'WJ1' : j.includes('2') ? 'WJ2' : j.includes('3') ? 'WJ3' : j;
+    wrap.appendChild(el('span',{class:'bdBadge',text:short}));
+  }
+  return wrap;
+}
+
 function openCreateModal(){
   return t.modal({
     title: 'Create Run Tracker',
@@ -186,6 +203,9 @@ async function render(){
   const trackers = await loadUpgradedTrackers();
   if (myToken !== renderToken) return;
 
+  // Avoid saving & re-rendering inside the loop.
+  let pendingSave = null;
+
   const container = document.getElementById('container');
   container.innerHTML = '';
 
@@ -201,7 +221,8 @@ async function render(){
     const linkedName = liveLinkedName || tracker.checklistItemName || null;
 
     if (tracker.checklistItemId && liveLinkedName && tracker.checklistItemName !== liveLinkedName){
-      mutateTracker(id, (tr) => ({ ...tr, checklistItemName: liveLinkedName }));
+      pendingSave = pendingSave || { ...(trackers || {}) };
+      pendingSave[id] = { ...tracker, checklistItemName: liveLinkedName };
     }
 
     const displayName = tracker.name || linkedName || 'Run Tracker';
@@ -283,32 +304,45 @@ async function render(){
     ]);
     card.appendChild(focusBar);
 
-    /* ✅ BREAKDOWN MODE: per your request, do NOT show "Overall by Jet" when breakdowns exist */
+    /* ✅ BREAKDOWN MODE: do NOT show "Overall by Jet" when breakdowns exist */
     if (tracker.breakdowns && tracker.breakdowns.length){
-      card.appendChild(el('div',{class:'sectionTitle',text:'Run Breakdown'}));
+      card.appendChild(el('div',{class:'sectionTitle',text:'Advanced Count'}));
 
+      let renderedAny = false;
       for (const bd of tracker.breakdowns){
         const bdJets = bd.jets || {};
+
+        // Focus mode: only show breakdowns that actually contain the focused jet.
+        if (focus !== 'ALL' && !bdJets[focus]) continue;
+
+        renderedAny = true;
         const s = sumJets(bdJets);
         const bdTarget = n(bd.totalTarget) || s.target;
         const bdDiff = s.current - bdTarget;
 
-        const collapsed = isBdCollapsed(id, bd.id);
+        // In focused view, do not force-breakdown collapse (it feels like "stuck minimized").
+        const collapsed = (focus === 'ALL') ? isBdCollapsed(id, bd.id) : false;
 
         const bdBox = el('div',{class:'breakdown'});
 
-        bdBox.appendChild(el('div',{class:'breakdownHeader'},[
-          el('div',{class:'bdName',text: bd.name || 'Breakdown'}),
-          el('div',{class:'bdMeta'},[
-            el('span',{text:`${fmt(s.current)} / ${fmt(bdTarget)}`}),
-            el('button',{
-              type:'button',
-              class:'iconBtn',
-              text: collapsed ? '▸' : '▾',
-              onclick:()=>{ toggleBdCollapsed(id, bd.id); render(); }
-            })
-          ])
-        ]));
+        const bdTitle = el('div',{class:'bdName'},[
+          el('span',{text: bd.name || 'Advanced Count'}),
+          jetBadges(Object.keys(bdJets))
+        ]);
+
+        const bdMeta = el('div',{class:'bdMeta'},[
+          el('span',{text:`${fmt(s.current)} / ${fmt(bdTarget)}`})
+        ]);
+        if (focus === 'ALL'){
+          bdMeta.appendChild(el('button',{
+            type:'button',
+            class:'iconBtn',
+            text: collapsed ? '▸' : '▾',
+            onclick:()=>{ toggleBdCollapsed(id, bd.id); render(); }
+          }));
+        }
+
+        bdBox.appendChild(el('div',{class:'breakdownHeader'},[bdTitle, bdMeta]));
 
         const bdBarWrap = el('div',{class:`barWrap ${bdDiff>0?'barOver':''}`});
         const bdBarFill = el('div',{class:'barFill'});
@@ -328,9 +362,13 @@ async function render(){
 
             const row = el('div',{class:'jetRow'});
 
+            const pill2 = statusPillText(currentVal, targetVal);
             row.appendChild(el('div',{class:'jetHeader'},[
               el('div',{class:'jetName',text:jetName}),
-              el('div',{class:`status ${st.cls}`,text:st.text})
+              el('div',{class:'jetMeta'},[
+                el('span',{class:'jetTargetLabel',text:`Target ${fmt(targetVal)}`} ),
+                el('span',{class:pill2.cls, text:pill2.text})
+              ])
             ]));
 
             const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
@@ -364,7 +402,7 @@ async function render(){
 
             row.appendChild(el('div',{class:'controls'},[
               minus, input, plus,
-              el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
+              el('div',{class:'max',text:''})
             ]));
 
             innerJets.appendChild(row);
@@ -374,6 +412,10 @@ async function render(){
         }
 
         card.appendChild(bdBox);
+      }
+
+      if (!renderedAny){
+        card.appendChild(el('div',{class:'collapsedNote',text:'No breakdowns match this focus.'}));
       }
 
       container.appendChild(card);
@@ -391,9 +433,13 @@ async function render(){
 
       const row = el('div',{class:'jetRow'});
 
+      const pill2 = statusPillText(currentVal, targetVal);
       row.appendChild(el('div',{class:'jetHeader'},[
         el('div',{class:'jetName',text:jetName}),
-        el('div',{class:`status ${st.cls}`,text:st.text})
+        el('div',{class:'jetMeta'},[
+          el('span',{class:'jetTargetLabel',text:`Target ${fmt(targetVal)}`} ),
+          el('span',{class:pill2.cls, text:pill2.text})
+        ])
       ]));
 
       const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
@@ -426,7 +472,7 @@ async function render(){
 
       row.appendChild(el('div',{class:'controls'},[
         minus, input, plus,
-        el('div',{class:'max',text:`/ ${fmt(targetVal)} target`})
+        el('div',{class:'max',text:''})
       ]));
 
       jetsWrap2.appendChild(row);
@@ -437,6 +483,11 @@ async function render(){
   }
 
   t.sizeTo(document.body);
+
+  if (pendingSave){
+    // Save updated checklist names without re-rendering.
+    try{ await saveTrackers(pendingSave); }catch{ /* ignore */ }
+  }
 }
 
 t.render(async () => {

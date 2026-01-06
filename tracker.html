@@ -7,23 +7,23 @@
 
   <style>
     :root{
-      --bg:#ffffff;
+      --bg:#f7f9fc;
       --text:#111111;
-      --muted:#555555;
+      --muted:#52606d;
 
-      --border:#d0d0d0;
-      --soft:#f4f4f4;
+      --border:#d6dde6;
+      --soft:#f1f5f9;
 
-      --btn-bg:#eeeeee;
+      --btn-bg:#eef2f7;
       --btn-text:#111111;
-      --btn-hover:#1e9b4b;
+      --btn-hover:#197a3a;
 
-      --primary-bg:#111111;
+      --primary-bg:#1f3b6d;
       --primary-text:#ffffff;
-      --primary-hover:#1e9b4b;
+      --primary-hover:#2563eb;
 
-      --danger:#b00020;
-      --good:#1e9b4b;
+      --danger:#b42318;
+      --good:#197a3a;
     }
 
     body{
@@ -41,8 +41,8 @@
       justify-content:space-between;
       gap:10px;
       padding:8px 10px;
-      border-bottom:1px solid #e0e0e0;
-      background:#f6f6f6;
+      border-bottom:1px solid var(--border);
+      background: linear-gradient(#f6f8fb, #eef2f7);
       position:sticky;
       top:0;
       z-index:5;
@@ -251,7 +251,7 @@
       border:1px solid #d2d2d2;
       margin-top:6px;
     }
-    .barFill{ height:100%; width:0%; background:#111; }
+    .barFill{ height:100%; width:0%; background:var(--primary-bg); }
     .barOver{ border-color:#ffb3be; }
     .barOver .barFill{ background:var(--danger); }
 
@@ -284,6 +284,27 @@
       font-weight:950;
       font-size:13px;
       line-height:1.1;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .bdBadges{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .bdBadge{
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid rgba(31,59,109,.25);
+      background:rgba(31,59,109,.08);
+      color:#14213d;
+      font-size:11px;
+      font-weight:950;
+      line-height:1;
+      white-space:nowrap;
     }
 
     .bdMeta{
@@ -315,6 +336,20 @@
       align-items:center;
       gap:10px;
       margin-bottom:6px;
+    }
+
+    .jetMeta{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+    .jetTargetLabel{
+      font-size:12px;
+      font-weight:950;
+      color:var(--muted);
+      white-space:nowrap;
     }
 
     .jetName{

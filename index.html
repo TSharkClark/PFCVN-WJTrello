@@ -21,11 +21,24 @@
         },
 
         "show-authorization": function (t) {
-          return t.authorize({
+          // Prefer RestApi authorize (more reliable in Power-Up iframes),
+          // fall back to t.authorize if needed.
+          var opts = {
             scope: { read: true, write: false },
             expiration: "never",
             name: "Waterjet Run Tracker"
-          });
+          };
+
+          try {
+            var rest = t.getRestApi && t.getRestApi();
+            if (rest && rest.authorize) {
+              return rest.authorize(opts);
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          return t.authorize(opts);
         },
 
         "card-buttons": function (t) {
