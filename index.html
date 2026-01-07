@@ -25,9 +25,9 @@
 
           "show-authorization": function (t) {
             const opts = {
-              scope: { read: true, write: false },
+              scope: "read",
               expiration: "never",
-              name: "Waterjet Run Tracker",
+              name: "Waterjet Run Tracker"
             };
 
             // Prefer REST client auth
