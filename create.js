@@ -1,23 +1,22 @@
 /* global TrelloPowerUp */
-const t = TrelloPowerUp.iframe();
+// Configure REST client with your Power-Up API key so authorization works reliably.
+const t = TrelloPowerUp.iframe({
+  appKey: '4d801d3f55e50db70afa582d388598ea',
+  appName: 'Waterjet Run Tracker',
+  appAuthor: 'tsharkclark'
+});
+
 const STORAGE_KEY = 'trackers';
 const JETS = ["Waterjet 1", "Waterjet 2", "Waterjet 3"];
-// Targets that come from auto-split are rounded to a shop-friendly step.
-// 0.1 means 6.68 / 3 becomes 2.2 each (effective total 6.6) to avoid "ghost under".
-const TARGET_STEP = 0.1;
+const TARGET_STEP = 0.1; // 0.1 resolution for auto-split targets
 
 function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
 function round3(v){ return Math.round(n(v) * 1000) / 1000; }
+function stripFloat(v){ return Number(Number(v).toFixed(6)); }
 function roundStep(v, step){
   const s = Number(step);
   if (!Number.isFinite(s) || s <= 0) return round3(v);
-  const x = n(v);
-  return Math.round(x / s) * s;
-}
-function stripFloat(v){
-  // prevent 1.2000000000000002
-  const x = n(v);
-  return Number.isFinite(x) ? Number(x.toFixed(6)) : 0;
+  return stripFloat(Math.round(n(v) / s) * s);
 }
 function uid(){ return 'trk_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
 function uidBd(){ return 'bd_' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
@@ -47,7 +46,7 @@ function upgradeTrackerSchema(tr){
   return {
     ...tr,
     totalTarget: tr.totalTarget ?? 0,
-    autoSplit: tr.autoSplit ?? false, // preserved for compatibility
+    autoSplit: tr.autoSplit ?? false,
     collapsed: tr.collapsed ?? false,
     jets: tr.jets || {},
     breakdowns,
@@ -61,19 +60,19 @@ async function isAuthorized(){
 }
 
 async function authorize(){
-  // Prefer RestApi authorize (more reliable in Power-Up iframes),
-  // fall back to t.authorize if needed.
   const opts = {
     scope: { read: true, write: false },
     expiration: "never",
     name: "Waterjet Run Tracker"
   };
 
+  // Prefer REST client authorize
   try{
     const rest = t.getRestApi();
     if (rest?.authorize) return await rest.authorize(opts);
   }catch{ /* ignore */ }
 
+  // Fallback
   return await t.authorize(opts);
 }
 
@@ -100,6 +99,7 @@ async function fetchChecklistItemsFlat(){
     }
   }catch{ /* ignore */ }
 
+  // Fallback: may be limited without authorization
   try{
     const card = await t.card('checklists');
     const lists = card?.checklists || [];
@@ -167,6 +167,23 @@ async function guessJetsFromMachineField(){
   }
 }
 
+/* ---------- SPLIT LOGIC (0.1 step, distributes remainder) ---------- */
+function splitTargets(totalRaw, jetCount){
+  const count = Math.max(1, Number(jetCount) || 1);
+  const total = roundStep(n(totalRaw), TARGET_STEP); // totals rounded to same step
+  const step = TARGET_STEP;
+
+  const base = stripFloat(Math.floor((total / count) / step) * step);
+  const remainder = stripFloat(total - base * count);
+
+  const addCount = Math.max(0, Math.round(remainder / step));
+  const targets = new Array(count).fill(base);
+  for (let i = 0; i < addCount && i < targets.length; i++){
+    targets[i] = stripFloat(targets[i] + step);
+  }
+  return { total, targets };
+}
+
 /* ---------- UI HELPERS ---------- */
 function buildJetToggles(selected){
   const wrap = document.getElementById('jetToggles');
@@ -183,8 +200,6 @@ function buildJetToggles(selected){
     btn.addEventListener('click', () => {
       btn.dataset.on = (btn.dataset.on === 'true') ? 'false' : 'true';
       renderSimpleJetTargets();
-      // Live auto-split when a total is typed.
-      if (!breakdowns.length) maybeAutoSplitSimpleFromTotal();
       t.sizeTo(document.body);
     });
 
@@ -208,7 +223,7 @@ function renderSimpleJetTargets(existingJets = null){
     const div = document.createElement('div');
     div.style.fontWeight = '900';
     div.style.color = '#555';
-    div.textContent = 'Select at least one default jet above.';
+    div.textContent = 'Select at least one jet above.';
     box.appendChild(div);
     return;
   }
@@ -227,6 +242,7 @@ function renderSimpleJetTargets(existingJets = null){
     input.step = 'any';
     input.inputMode = 'decimal';
     input.dataset.jet = jet;
+
     if (existingJets?.[jet]?.target != null) input.value = existingJets[jet].target;
 
     line.appendChild(left);
@@ -235,40 +251,27 @@ function renderSimpleJetTargets(existingJets = null){
   }
 }
 
-function splitTotalAcrossJets(total, jetCount){
-  const count = Math.max(1, Number(jetCount) || 1);
-  const per = stripFloat(roundStep(total / count, TARGET_STEP));
-  const effectiveTotal = stripFloat(per * count);
-  return { per, effectiveTotal };
-}
-
 function applyAutoSplitSimple(){
   const jets = selectedDefaultJets();
-  if (!jets.length){ setWarn('Select at least one default jet first.'); return; }
+  if (!jets.length){ setWarn('Select at least one jet first.'); return; }
 
   const totalRaw = document.getElementById('totalTarget').value;
-  const total = round3(totalRaw);
-  if (!Number.isFinite(total) || total <= 0){ setWarn('Enter a Total target above 0 for auto-split.'); return; }
-
-  setWarn('');
-  const perJet = stripFloat(roundStep(total / jets.length, TARGET_STEP));
-
-  for (const inp of document.querySelectorAll('#jetsBox .jetTarget')){
-    inp.value = perJet;
+  const totalVal = n(totalRaw);
+  if (!Number.isFinite(totalVal) || totalVal <= 0){
+    setWarn('Enter a Totals value above 0 to auto-split.');
+    return;
   }
 
-  // Normalize effective total to prevent "ghost remainder".
-  const effectiveTotal = stripFloat(perJet * jets.length);
-  document.getElementById('totalTarget').value = effectiveTotal;
-}
+  setWarn('');
+  const { total, targets } = splitTargets(totalVal, jets.length);
 
-function maybeAutoSplitSimpleFromTotal(){
-  // Live auto-split when the total changes (simple mode only)
-  if (breakdowns.length) return;
-  const totalRaw = document.getElementById('totalTarget')?.value;
-  if (totalRaw === '' || totalRaw == null) return;
-  const total = round3(totalRaw);
-  if (total > 0) applyAutoSplitSimple();
+  // Do NOT fight the user while typing; only set values on button click
+  document.getElementById('totalTarget').value = total;
+
+  const inputs = Array.from(document.querySelectorAll('#jetsBox .jetTarget'));
+  for (let i = 0; i < inputs.length; i++){
+    inputs[i].value = targets[i] ?? targets[targets.length - 1] ?? 0;
+  }
 }
 
 function readSimpleJets(existingJets){
@@ -288,13 +291,8 @@ let breakdowns = [];
 function ensureModeVisibility(){
   const has = breakdowns.length > 0;
 
-  // ✅ show breakdown editor when breakdowns exist
-  const bdWrap = document.getElementById('breakdownsWrap');
-  bdWrap.style.display = has ? 'block' : 'none';
-
-  // ✅ hide ONLY the default jets section (your request), not the whole card
-  const djSection = document.getElementById('defaultJetsSection');
-  djSection.style.display = has ? 'none' : 'block';
+  document.getElementById('breakdownsWrap').style.display = has ? 'block' : 'none';
+  document.getElementById('defaultJetsSection').style.display = has ? 'none' : 'block';
 }
 
 function addBreakdown(prefill = null){
@@ -321,52 +319,36 @@ function breakdownSelectedJets(bd){
 
 function toggleBreakdownJet(bd, jetName){
   bd.jets = bd.jets || {};
-  if (bd.jets[jetName]){
-    delete bd.jets[jetName];
-  } else {
-    bd.jets[jetName] = { current: 0, target: 0 };
-  }
+  if (bd.jets[jetName]) delete bd.jets[jetName];
+  else bd.jets[jetName] = { current: 0, target: 0 };
+
+  // must always have at least 1 jet
   if (!Object.keys(bd.jets).length){
     bd.jets[jetName] = { current: 0, target: 0 };
   }
-
-  // Live auto-split when jets change and a total exists.
-  maybeAutoSplitBreakdown(bd);
-}
-
-function maybeAutoSplitBreakdown(bd){
-  if (!bd) return;
-  const jets = breakdownSelectedJets(bd);
-  const total = round3(bd.totalTarget);
-  if (!jets.length || !Number.isFinite(total) || total <= 0) return;
-  const { per, effectiveTotal } = splitTotalAcrossJets(total, jets.length);
-  for (const j of jets){
-    bd.jets[j].target = per;
-  }
-  // Normalize to effective total to avoid "ghost under".
-  bd.totalTarget = effectiveTotal;
-}
-
-function autoSplitOneBreakdown(bd){
-  const jets = breakdownSelectedJets(bd);
-  const total = round3(bd.totalTarget);
-  if (!jets.length || !total || total <= 0) return;
-
-  const per = stripFloat(roundStep(total / jets.length, TARGET_STEP));
-  for (const j of jets){
-    bd.jets[j].target = per;
-  }
-
-  // Normalize effective total so targets add up cleanly.
-  bd.totalTarget = stripFloat(per * jets.length);
 }
 
 function applyAutoSplitBreakdowns(){
-  if (!breakdowns.length){ setWarn('Add at least one breakdown first.'); return; }
+  if (!breakdowns.length){ setWarn('Add at least one Advanced Count first.'); return; }
   setWarn('');
 
-  for (const bd of breakdowns) autoSplitOneBreakdown(bd);
+  for (const bd of breakdowns){
+    const jets = breakdownSelectedJets(bd);
+    const totalVal = n(bd.totalTarget);
+    if (!jets.length || !Number.isFinite(totalVal) || totalVal <= 0) continue;
+
+    const { total, targets } = splitTargets(totalVal, jets.length);
+    bd.totalTarget = total;
+
+    // Apply in stable order
+    const ordered = jets.slice().sort((a,b) => JETS.indexOf(a) - JETS.indexOf(b));
+    for (let i = 0; i < ordered.length; i++){
+      bd.jets[ordered[i]].target = targets[i] ?? targets[targets.length - 1] ?? 0;
+    }
+  }
+
   renderBreakdowns();
+  t.sizeTo(document.body);
 }
 
 function renderBreakdowns(){
@@ -417,13 +399,11 @@ function renderBreakdowns(){
     const tgtInput = document.createElement('input');
     tgtInput.type = 'number';
     tgtInput.step = 'any';
-    tgtInput.value = bd.totalTarget ?? 0;
+    tgtInput.inputMode = 'decimal';
+    tgtInput.value = (bd.totalTarget ?? '');
     tgtInput.addEventListener('input', e => {
-      bd.totalTarget = round3(e.target.value);
-      autoSplitOneBreakdown(bd);
-      renderBreakdowns();
-      ensureModeVisibility();
-      t.sizeTo(document.body);
+      // IMPORTANT: do not autosplit or rerender while typing (prevents lockout)
+      bd.totalTarget = e.target.value === '' ? '' : round3(e.target.value);
     });
     tgtWrap.appendChild(tgtLabel);
     tgtWrap.appendChild(tgtInput);
@@ -433,7 +413,7 @@ function renderBreakdowns(){
 
     const jetsTitle = document.createElement('div');
     jetsTitle.className = 'bdJetsTitle';
-    jetsTitle.textContent = 'Jets for this breakdown';
+    jetsTitle.textContent = 'Jets for this Advanced Count';
 
     const chips = document.createElement('div');
     chips.className = 'chips';
@@ -446,8 +426,7 @@ function renderBreakdowns(){
       btn.dataset.on = bd.jets?.[j] ? 'true' : 'false';
       btn.addEventListener('click', () => {
         toggleBreakdownJet(bd, j);
-        autoSplitOneBreakdown(bd);
-        renderBreakdowns();
+        renderBreakdowns(); // safe on click (not while typing totals)
         ensureModeVisibility();
         t.sizeTo(document.body);
       });
@@ -457,7 +436,7 @@ function renderBreakdowns(){
     const panel = document.createElement('div');
     panel.className = 'panel';
 
-    const selected = breakdownSelectedJets(bd);
+    const selected = breakdownSelectedJets(bd).slice().sort((a,b) => JETS.indexOf(a) - JETS.indexOf(b));
     for (const j of selected){
       const line = document.createElement('div');
       line.className = 'jetLine';
@@ -470,8 +449,9 @@ function renderBreakdowns(){
       inp.className = 'jetTarget';
       inp.type = 'number';
       inp.step = 'any';
-      inp.value = bd.jets[j]?.target ?? 0;
-      inp.addEventListener('input', e => { bd.jets[j].target = round3(e.target.value); });
+      inp.inputMode = 'decimal';
+      inp.value = bd.jets[j]?.target ?? '';
+      inp.addEventListener('input', e => { bd.jets[j].target = e.target.value === '' ? '' : round3(e.target.value); });
 
       line.appendChild(nm);
       line.appendChild(inp);
@@ -499,19 +479,13 @@ function validate(){
   if (breakdowns.length){
     for (const b of breakdowns){
       if (!String(b.name || '').trim()){
-        setWarn('Each breakdown needs a name.');
+        setWarn('Each Advanced Count needs a name.');
         return false;
       }
       const jets = breakdownSelectedJets(b);
       if (!jets.length){
-        setWarn(`Breakdown "${b.name}" must include at least one jet.`);
+        setWarn(`Advanced Count "${b.name}" must include at least one jet.`);
         return false;
-      }
-      for (const j of jets){
-        if (!Number.isFinite(n(b.jets?.[j]?.target))){
-          setWarn(`Invalid target on breakdown "${b.name}" for ${j}.`);
-          return false;
-        }
       }
     }
     setWarn('');
@@ -519,19 +493,14 @@ function validate(){
   }
 
   const jets = selectedDefaultJets();
-  if (!jets.length){ setWarn('Select at least one default jet.'); return false; }
-  for (const j of jets){
-    const inp = document.querySelector(`#jetsBox .jetTarget[data-jet="${j}"]`);
-    if (!Number.isFinite(n(inp?.value))){
-      setWarn(`Invalid target for ${j}.`);
-      return false;
-    }
-  }
+  if (!jets.length){ setWarn('Select at least one jet.'); return false; }
   setWarn('');
   return true;
 }
 
 /* ---------- BOOT ---------- */
+let splitMode = 'manual'; // default manual (no autosplit while typing)
+
 async function boot(){
   const mode = qs('mode');
   const editId = qs('id');
@@ -540,8 +509,20 @@ async function boot(){
   const subtitle = document.getElementById('subtitle');
   const saveBtn = document.getElementById('saveBtn');
   const authBtn = document.getElementById('authBtn');
+  const manualBtn = document.getElementById('manualBtn');
 
-  // auth button (reliable + visible state)
+  const setManualUi = () => {
+    // purely UI indicator; manual is default and we do not autosplit on typing
+    if (splitMode === 'manual'){
+      manualBtn.classList.add('btnPrimary');
+      manualBtn.textContent = 'Manual';
+    } else {
+      manualBtn.classList.remove('btnPrimary');
+      manualBtn.textContent = 'Manual';
+    }
+  };
+
+  // Auth button UI
   const setAuthBtnUi = ({ loading=false, error='' }={}) => {
     authBtn.disabled = !!loading;
     authBtn.textContent = loading ? 'Authorizing…' : 'Authorize';
@@ -561,17 +542,14 @@ async function boot(){
     }catch(err){
       setAuthBtnUi({
         loading:false,
-        error: `Authorize failed or was blocked.\n\nIf a popup didn’t open, allow popups for Trello and try again.\n\nDetails: ${err?.message || String(err)}`
+        error: `Authorize failed or was blocked.\n\nAllow popups for Trello and try again.\n\nDetails: ${err?.message || String(err)}`
       });
     }finally{
       setAuthBtnUi({ loading:false });
     }
   };
 
-  const all = await loadAll();
-  let editing = null;
-
-  // checklist dropdown
+  // Checklist dropdown
   const checklistSelect = document.getElementById('checklist');
   checklistSelect.innerHTML = '<option value="">— Not linked —</option>';
 
@@ -597,7 +575,10 @@ async function boot(){
     }
   }
 
-  // default jets initial state
+  const all = await loadAll();
+  let editing = null;
+
+  // Default jets initial state (Machine(s))
   const guessed = await guessJetsFromMachineField();
   const defaultJets = (guessed && guessed.length) ? guessed : [...JETS];
 
@@ -622,7 +603,7 @@ async function boot(){
       breakdowns = editing.breakdowns.map(b => ({
         id: b.id || uidBd(),
         name: b.name || '',
-        totalTarget: b.totalTarget ?? 0,
+        totalTarget: b.totalTarget ?? '',
         jets: b.jets || {}
       }));
       renderBreakdowns();
@@ -636,21 +617,15 @@ async function boot(){
 
   ensureModeVisibility();
 
-  // Live auto-split when typing total (simple mode).
-  const totalInp = document.getElementById('totalTarget');
-  if (totalInp) totalInp.oninput = () => { maybeAutoSplitSimpleFromTotal(); };
+  manualBtn.onclick = () => {
+    splitMode = 'manual';
+    setManualUi();
+    setWarn('');
+    t.sizeTo(document.body);
+  };
+  setManualUi();
 
-  // Live simple-mode auto-split
-  const totalInput = document.getElementById('totalTarget');
-  if (totalInput){
-    totalInput.addEventListener('input', () => {
-      maybeAutoSplitSimpleFromTotal();
-      t.sizeTo(document.body);
-    });
-  }
-
-  document.getElementById('applyAuto').onclick = () => { applyAutoSplit(); t.sizeTo(document.body); };
-
+  document.getElementById('applyAuto').onclick = () => { applyAutoSplit(); };
   document.getElementById('addBreakdownBtn').onclick = () => {
     addBreakdown();
     renderBreakdowns();
@@ -693,7 +668,7 @@ async function boot(){
         return {
           id: b.id || uidBd(),
           name: String(b.name || '').trim(),
-          totalTarget: round3(b.totalTarget),
+          totalTarget: b.totalTarget === '' ? 0 : round3(b.totalTarget),
           jets: outJets
         };
       });

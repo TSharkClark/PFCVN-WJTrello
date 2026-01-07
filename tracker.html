@@ -34,7 +34,6 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    /* compact header INSIDE iframe (closest possible to Trello gray header placement) */
     .topbar{
       display:flex;
       align-items:center;
@@ -60,7 +59,6 @@
       width:8px;height:8px;border-radius:999px;background:var(--good);
       box-shadow:0 0 0 3px rgba(30,155,75,.12);
     }
-
     .primaryBtn{
       border:1px solid var(--primary-bg);
       background:var(--primary-bg);
@@ -78,10 +76,7 @@
       background:var(--primary-hover);
     }
 
-    #container{
-      padding:10px;
-      padding-top:8px;
-    }
+    #container{ padding:10px; padding-top:8px; }
 
     .empty{
       padding:12px;
@@ -109,25 +104,10 @@
       align-items:flex-start;
       margin-bottom:8px;
     }
+    .title{ font-size:14px; font-weight:950; line-height:1.15; }
+    .sub{ margin-top:4px; color:var(--muted); font-size:12px; font-weight:800; }
 
-    .title{
-      font-size:14px;
-      font-weight:950;
-      line-height:1.15;
-    }
-    .sub{
-      margin-top:4px;
-      color:var(--muted);
-      font-size:12px;
-      font-weight:800;
-    }
-
-    .actions{
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
+    .actions{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 
     .btn{
       border:1px solid var(--border);
@@ -140,22 +120,15 @@
       user-select:none;
       font-size:12px;
     }
-    .btn:hover{
-      border-color:var(--btn-hover);
-      color:var(--btn-hover);
-    }
+    .btn:hover{ border-color:var(--btn-hover); color:var(--btn-hover); }
 
     .btnDanger{
       border-color:#ffb3be;
       background:#fff;
       color:var(--danger);
     }
-    .btnDanger:hover{
-      border-color:var(--danger);
-      color:var(--danger);
-    }
+    .btnDanger:hover{ border-color:var(--danger); color:var(--danger); }
 
-    /* focus bar */
     .focusBar{
       display:flex;
       align-items:center;
@@ -164,18 +137,8 @@
       margin:6px 0 8px 0;
       flex-wrap:wrap;
     }
-    .focusLeft{
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .focusLabel{
-      font-size:12px;
-      font-weight:950;
-      color:var(--muted);
-      margin-right:4px;
-    }
+    .focusLeft{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .focusLabel{ font-size:12px; font-weight:950; color:var(--muted); margin-right:4px; }
     .chip{
       border:1px solid var(--border);
       background:#fff;
@@ -188,10 +151,7 @@
       font-size:12px;
       line-height:1;
     }
-    .chip:hover{
-      border-color:var(--btn-hover);
-      color:var(--btn-hover);
-    }
+    .chip:hover{ border-color:var(--btn-hover); color:var(--btn-hover); }
     .chip.on{
       background:rgba(30,155,75,.12);
       border-color:rgba(30,155,75,.5);
@@ -209,10 +169,7 @@
       font-size:12px;
       line-height:1;
     }
-    .iconBtn:hover{
-      border-color:var(--btn-hover);
-      color:var(--btn-hover);
-    }
+    .iconBtn:hover{ border-color:var(--btn-hover); color:var(--btn-hover); }
 
     .totalBox{
       border:1px solid var(--border);
@@ -252,6 +209,12 @@
       margin-top:6px;
     }
     .barFill{ height:100%; width:0%; background:var(--primary-bg); }
+
+    /* ✅ Jet bars: green gradient fill */
+    .barFillJet{
+      background: linear-gradient(90deg, rgba(25,122,58,.18), rgba(25,122,58,1));
+    }
+
     .barOver{ border-color:#ffb3be; }
     .barOver .barFill{ background:var(--danger); }
 
@@ -287,13 +250,10 @@
       display:flex;
       align-items:center;
       gap:8px;
-    }
-
-    .bdBadges{
-      display:flex;
-      gap:6px;
       flex-wrap:wrap;
     }
+
+    .bdBadges{ display:flex; gap:6px; flex-wrap:wrap; }
     .bdBadge{
       display:inline-block;
       padding:3px 8px;
@@ -317,11 +277,7 @@
       gap:8px;
     }
 
-    .jets{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
+    .jets{ display:flex; flex-direction:column; gap:8px; }
 
     .jetRow{
       border:1px solid var(--border);
@@ -345,6 +301,7 @@
       justify-content:flex-end;
       flex-wrap:wrap;
     }
+
     .jetTargetLabel{
       font-size:12px;
       font-weight:950;
@@ -352,20 +309,7 @@
       white-space:nowrap;
     }
 
-    .jetName{
-      font-weight:950;
-      font-size:13px;
-      white-space:nowrap;
-    }
-
-    .status{
-      font-weight:950;
-      font-size:12px;
-      color:var(--muted);
-      white-space:nowrap;
-    }
-    .statusOver{ color:var(--danger); }
-    .statusUnder{ color:var(--good); }
+    .jetName{ font-weight:950; font-size:13px; white-space:nowrap; }
 
     .controls{
       display:flex;
@@ -390,10 +334,7 @@
       justify-content:center;
       user-select:none;
     }
-    .pm:hover{
-      border-color:var(--btn-hover);
-      color:var(--btn-hover);
-    }
+    .pm:hover{ border-color:var(--btn-hover); color:var(--btn-hover); }
 
     input[type=number]::-webkit-outer-spin-button,
     input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -411,15 +352,6 @@
       min-width:96px;
       color:var(--text);
       background:#fff;
-    }
-
-    .max{
-      min-width:110px;
-      text-align:right;
-      color:var(--muted);
-      font-weight:950;
-      white-space:nowrap;
-      font-size:12px;
     }
 
     .collapsedNote{

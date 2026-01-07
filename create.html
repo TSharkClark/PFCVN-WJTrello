@@ -92,9 +92,6 @@
       background:#fff;
       color:var(--text);
     }
-    select{
-      font-weight:900;
-    }
 
     .row{
       display:flex;
@@ -131,6 +128,7 @@
       background:var(--primary-hover);
       color:#fff;
     }
+
     .btnDanger{
       border-color:#ffb3be;
       background:#fff;
@@ -270,13 +268,14 @@
       <input id="totalTarget" type="number" step="any" inputmode="decimal" />
 
       <div class="row" style="margin-top:10px;">
+        <button class="btn" id="manualBtn" type="button">Manual</button>
         <button class="btn" id="applyAuto" type="button">Apply auto-split</button>
         <button class="btn" id="addBreakdownBtn" type="button">Add Advanced Count</button>
       </div>
     </div>
 
     <div class="card" id="defaultJetsSection">
-      <label id="defaultJetsLabel">Jets</label>
+      <label>Jets</label>
       <div class="chips" id="jetToggles"></div>
 
       <div class="sectionTitle">Per-jet targets</div>

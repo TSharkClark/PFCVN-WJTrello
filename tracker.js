@@ -1,7 +1,11 @@
 /* global TrelloPowerUp */
-const t = TrelloPowerUp.iframe();
-const STORAGE_KEY = 'trackers';
+const t = TrelloPowerUp.iframe({
+  appKey: '4d801d3f55e50db70afa582d388598ea',
+  appName: 'Waterjet Run Tracker',
+  appAuthor: 'tsharkclark'
+});
 
+const STORAGE_KEY = 'trackers';
 let renderToken = 0;
 
 function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
@@ -62,7 +66,6 @@ async function loadUpgradedTrackers(){
   return out;
 }
 
-// REST-first checklist name (stable)
 async function getChecklistItemName(itemId){
   if (!itemId) return null;
   try{
@@ -122,13 +125,6 @@ function computeTotals(tr){
   return { totalCurrent: s.current, totalTarget };
 }
 
-function statusFor(currentVal, targetVal){
-  const diff = n(currentVal) - n(targetVal);
-  if (diff > 0) return { text:`OVER +${fmt(diff)}`, cls:'statusOver', over:true };
-  if (diff < 0) return { text:`UNDER ${fmt(Math.abs(diff))}`, cls:'statusUnder', over:false };
-  return { text:'ON TARGET', cls:'', over:false };
-}
-
 function statusPillText(currentVal, targetVal){
   const diff = n(currentVal) - n(targetVal);
   if (diff > 0) return { text:`OVER +${fmt(diff)}`, cls:'pill pillOver' };
@@ -136,12 +132,21 @@ function statusPillText(currentVal, targetVal){
   return { text:'ON', cls:'pill pillUnder' };
 }
 
-function jetBadges(jetNames){
-  const jets = Array.isArray(jetNames) ? jetNames : Object.keys(jetNames || {});
+function waterjetBadgeName(jetName){
+  if (jetName.includes('1')) return 'Waterjet #1';
+  if (jetName.includes('2')) return 'Waterjet #2';
+  if (jetName.includes('3')) return 'Waterjet #3';
+  return jetName;
+}
+
+function jetBadgesFromJetsObject(jetsObj){
   const wrap = el('div',{class:'bdBadges'});
-  for (const j of jets){
-    const short = j.includes('1') ? 'WJ1' : j.includes('2') ? 'WJ2' : j.includes('3') ? 'WJ3' : j;
-    wrap.appendChild(el('span',{class:'bdBadge',text:short}));
+  const keys = Object.keys(jetsObj || {});
+  // Stable order: 1,2,3
+  const order = ['Waterjet 1','Waterjet 2','Waterjet 3'];
+  keys.sort((a,b)=> order.indexOf(a)-order.indexOf(b));
+  for (const j of keys){
+    wrap.appendChild(el('span',{class:'bdBadge',text:waterjetBadgeName(j)}));
   }
   return wrap;
 }
@@ -203,7 +208,6 @@ async function render(){
   const trackers = await loadUpgradedTrackers();
   if (myToken !== renderToken) return;
 
-  // Avoid saving & re-rendering inside the loop.
   let pendingSave = null;
 
   const container = document.getElementById('container');
@@ -291,7 +295,6 @@ async function render(){
       continue;
     }
 
-    // Focus controls (single out your machine)
     const focus = getFocus(id);
     const focusBar = el('div',{class:'focusBar'},[
       el('div',{class:'focusLeft'},[
@@ -304,37 +307,40 @@ async function render(){
     ]);
     card.appendChild(focusBar);
 
-    /* ✅ BREAKDOWN MODE: do NOT show "Overall by Jet" when breakdowns exist */
+    // Breakdown mode
     if (tracker.breakdowns && tracker.breakdowns.length){
       card.appendChild(el('div',{class:'sectionTitle',text:'Advanced Count'}));
 
       let renderedAny = false;
+
       for (const bd of tracker.breakdowns){
         const bdJets = bd.jets || {};
 
-        // Focus mode: only show breakdowns that actually contain the focused jet.
+        // ✅ Focus mode: ONLY show breakdowns that contain that jet
         if (focus !== 'ALL' && !bdJets[focus]) continue;
 
         renderedAny = true;
+
         const s = sumJets(bdJets);
         const bdTarget = n(bd.totalTarget) || s.target;
         const bdDiff = s.current - bdTarget;
 
-        // In focused view, do not force-breakdown collapse (it feels like "stuck minimized").
+        // ✅ In focus mode: never force collapsed (fixes “stuck minimized”)
         const collapsed = (focus === 'ALL') ? isBdCollapsed(id, bd.id) : false;
 
         const bdBox = el('div',{class:'breakdown'});
 
-        const bdTitle = el('div',{class:'bdName'},[
+        const nameWrap = el('div',{class:'bdName'},[
           el('span',{text: bd.name || 'Advanced Count'}),
-          jetBadges(Object.keys(bdJets))
+          jetBadgesFromJetsObject(bdJets)
         ]);
 
-        const bdMeta = el('div',{class:'bdMeta'},[
+        const metaRight = el('div',{class:'bdMeta'},[
           el('span',{text:`${fmt(s.current)} / ${fmt(bdTarget)}`})
         ]);
+
         if (focus === 'ALL'){
-          bdMeta.appendChild(el('button',{
+          metaRight.appendChild(el('button',{
             type:'button',
             class:'iconBtn',
             text: collapsed ? '▸' : '▾',
@@ -342,7 +348,7 @@ async function render(){
           }));
         }
 
-        bdBox.appendChild(el('div',{class:'breakdownHeader'},[bdTitle, bdMeta]));
+        bdBox.appendChild(el('div',{class:'breakdownHeader'},[nameWrap, metaRight]));
 
         const bdBarWrap = el('div',{class:`barWrap ${bdDiff>0?'barOver':''}`});
         const bdBarFill = el('div',{class:'barFill'});
@@ -358,21 +364,20 @@ async function render(){
 
             const currentVal = n(data.current);
             const targetVal = n(data.target);
-            const st = statusFor(currentVal, targetVal);
+            const pill2 = statusPillText(currentVal, targetVal);
 
             const row = el('div',{class:'jetRow'});
 
-            const pill2 = statusPillText(currentVal, targetVal);
             row.appendChild(el('div',{class:'jetHeader'},[
               el('div',{class:'jetName',text:jetName}),
               el('div',{class:'jetMeta'},[
-                el('span',{class:'jetTargetLabel',text:`Target ${fmt(targetVal)}`} ),
+                el('span',{class:'jetTargetLabel',text:`${fmt(currentVal)} / ${fmt(targetVal)}`}),
                 el('span',{class:pill2.cls, text:pill2.text})
               ])
             ]));
 
-            const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
-            const barFill = el('div',{class:'barFill'});
+            const barWrap = el('div',{class:`barWrap ${(currentVal-targetVal)>0?'barOver':''}`});
+            const barFill = el('div',{class:'barFill barFillJet'});
             barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
             barWrap.appendChild(barFill);
             row.appendChild(barWrap);
@@ -400,10 +405,7 @@ async function render(){
 
             input.addEventListener('change', e => applyValue(e.target.value));
 
-            row.appendChild(el('div',{class:'controls'},[
-              minus, input, plus,
-              el('div',{class:'max',text:''})
-            ]));
+            row.appendChild(el('div',{class:'controls'},[ minus, input, plus ]));
 
             innerJets.appendChild(row);
           }
@@ -415,35 +417,34 @@ async function render(){
       }
 
       if (!renderedAny){
-        card.appendChild(el('div',{class:'collapsedNote',text:'No breakdowns match this focus.'}));
+        card.appendChild(el('div',{class:'collapsedNote',text:'No Advanced Count match this focus.'}));
       }
 
       container.appendChild(card);
       continue;
     }
 
-    // No-breakdown mode
+    // No-breakdown mode (kept minimal)
     const jetsWrap2 = el('div',{class:'jets'});
     for (const [jetName, data] of Object.entries(tracker.jets || {})){
       if (focus !== 'ALL' && jetName !== focus) continue;
 
       const currentVal = n(data.current);
       const targetVal = n(data.target);
-      const st = statusFor(currentVal, targetVal);
+      const pill2 = statusPillText(currentVal, targetVal);
 
       const row = el('div',{class:'jetRow'});
 
-      const pill2 = statusPillText(currentVal, targetVal);
       row.appendChild(el('div',{class:'jetHeader'},[
         el('div',{class:'jetName',text:jetName}),
         el('div',{class:'jetMeta'},[
-          el('span',{class:'jetTargetLabel',text:`Target ${fmt(targetVal)}`} ),
+          el('span',{class:'jetTargetLabel',text:`${fmt(currentVal)} / ${fmt(targetVal)}`}),
           el('span',{class:pill2.cls, text:pill2.text})
         ])
       ]));
 
-      const barWrap = el('div',{class:`barWrap ${st.over?'barOver':''}`});
-      const barFill = el('div',{class:'barFill'});
+      const barWrap = el('div',{class:`barWrap ${(currentVal-targetVal)>0?'barOver':''}`});
+      const barFill = el('div',{class:'barFill barFillJet'});
       barFill.style.width = (pct(currentVal,targetVal)*100).toFixed(0)+'%';
       barWrap.appendChild(barFill);
       row.appendChild(barWrap);
@@ -470,10 +471,7 @@ async function render(){
 
       input.addEventListener('change', e => applyValue(e.target.value));
 
-      row.appendChild(el('div',{class:'controls'},[
-        minus, input, plus,
-        el('div',{class:'max',text:''})
-      ]));
+      row.appendChild(el('div',{class:'controls'},[ minus, input, plus ]));
 
       jetsWrap2.appendChild(row);
     }
@@ -485,7 +483,6 @@ async function render(){
   t.sizeTo(document.body);
 
   if (pendingSave){
-    // Save updated checklist names without re-rendering.
     try{ await saveTrackers(pendingSave); }catch{ /* ignore */ }
   }
 }

@@ -9,65 +9,70 @@
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
     <script>
       /* global TrelloPowerUp */
-      TrelloPowerUp.initialize({
-        "on-enable": function () {
-          return Promise.resolve();
-        },
+      const APP_KEY = "4d801d3f55e50db70afa582d388598ea";
 
-        "authorization-status": function (t) {
-          return t.getRestApi().isAuthorized().then(function (authorized) {
-            return { authorized: authorized };
-          });
-        },
+      TrelloPowerUp.initialize(
+        {
+          "on-enable": function () {
+            return Promise.resolve();
+          },
 
-        "show-authorization": function (t) {
-          // Prefer RestApi authorize (more reliable in Power-Up iframes),
-          // fall back to t.authorize if needed.
-          var opts = {
-            scope: { read: true, write: false },
-            expiration: "never",
-            name: "Waterjet Run Tracker"
-          };
+          "authorization-status": function (t) {
+            return t.getRestApi().isAuthorized().then(function (authorized) {
+              return { authorized: authorized };
+            });
+          },
 
-          try {
-            var rest = t.getRestApi && t.getRestApi();
-            if (rest && rest.authorize) {
-              return rest.authorize(opts);
-            }
-          } catch (e) {
-            // ignore
+          "show-authorization": function (t) {
+            const opts = {
+              scope: { read: true, write: false },
+              expiration: "never",
+              name: "Waterjet Run Tracker",
+            };
+
+            // Prefer REST client auth
+            try {
+              const rest = t.getRestApi && t.getRestApi();
+              if (rest && rest.authorize) return rest.authorize(opts);
+            } catch (e) {}
+
+            // Fallback (should still work with appKey configured)
+            return t.authorize(opts);
+          },
+
+          "card-buttons": function (t) {
+            return [{
+              icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
+              text: "Add Run Tracker",
+              callback: function (t) {
+                return t.modal({
+                  title: "Create Run Tracker",
+                  url: t.signUrl("./create.html"),
+                  fullscreen: false,
+                  height: 700
+                });
+              }
+            }];
+          },
+
+          "card-back-section": function (t) {
+            return {
+              title: "Waterjet Run Tracker",
+              icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
+              content: {
+                type: "iframe",
+                url: t.signUrl("./tracker.html"),
+                height: 620
+              }
+            };
           }
-
-          return t.authorize(opts);
         },
-
-        "card-buttons": function (t) {
-          return [{
-            icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
-            text: "Add Run Tracker",
-            callback: function (t) {
-              return t.modal({
-                title: "Create Run Tracker",
-                url: t.signUrl("./create.html"),
-                fullscreen: false,
-                height: 700
-              });
-            }
-          }];
-        },
-
-        "card-back-section": function (t) {
-          return {
-            title: "Waterjet Run Tracker",
-            icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png",
-            content: {
-              type: "iframe",
-              url: t.signUrl("./tracker.html"),
-              height: 620
-            }
-          };
+        {
+          appKey: APP_KEY,
+          appName: "Waterjet Run Tracker",
+          appAuthor: "tsharkclark"
         }
-      });
+      );
     </script>
   </body>
 </html>
